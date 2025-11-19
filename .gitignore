@@ -1,0 +1,22 @@
+# Build outputs
+out/
+kernel-*/
+*.img
+
+# Bazel
+bazel-*
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
