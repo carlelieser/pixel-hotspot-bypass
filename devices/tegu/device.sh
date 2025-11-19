@@ -13,7 +13,7 @@ ANDROID_VERSION="android14-11"
 
 # Manifest for repo init
 MANIFEST_URL="https://android.googlesource.com/kernel/manifest"
-MANIFEST_BRANCH="android-gs-tegu-6.1-android14"
+MANIFEST_BRANCH="android-gs-tegu-6.1-android15-d4"
 
 # Build configuration
 BAZEL_CONFIG="tegu"

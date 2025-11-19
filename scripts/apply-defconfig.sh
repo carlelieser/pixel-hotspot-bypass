@@ -104,14 +104,12 @@ apply_gki_defconfig_changes() {
     # Create backup
     cp "$gki_defconfig" "${gki_defconfig}.bak"
 
-    # Add after NETFILTER_ADVANCED if it exists
-    if grep -q "CONFIG_NETFILTER_ADVANCED" "$gki_defconfig"; then
-        sed -i '/CONFIG_NETFILTER_ADVANCED/a CONFIG_NETFILTER_XT_TARGET_HL=y' "$gki_defconfig"
+    # Insert after CONFIG_NETFILTER_XT_TARGET_DSCP=y to maintain alphabetical order
+    # This is required for Bazel's defconfig validation (savedefconfig check)
+    if grep -q "CONFIG_NETFILTER_XT_TARGET_DSCP=y" "$gki_defconfig"; then
+        sed -i '/^CONFIG_NETFILTER_XT_TARGET_DSCP=y$/a CONFIG_NETFILTER_XT_TARGET_HL=y' "$gki_defconfig"
     else
-        # Append at end
-        echo "" >> "$gki_defconfig"
-        echo "# TTL/HL modification for hotspot bypass" >> "$gki_defconfig"
-        echo "CONFIG_NETFILTER_ADVANCED=y" >> "$gki_defconfig"
+        log_warn "CONFIG_NETFILTER_XT_TARGET_DSCP not found, appending CONFIG_NETFILTER_XT_TARGET_HL at end"
         echo "CONFIG_NETFILTER_XT_TARGET_HL=y" >> "$gki_defconfig"
     fi
 

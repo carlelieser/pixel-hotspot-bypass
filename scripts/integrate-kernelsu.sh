@@ -66,12 +66,19 @@ clone_kernelsu() {
     local calculated_version=$((10000 + commit_count + 200))
     log_info "KernelSU-Next commit count: $commit_count"
     log_info "Calculated version: $calculated_version"
+
+    # Move kernel source files to parent directory
+    # KernelSU-Next repo structure has kernel source in kernel/ subdirectory
+    log_info "Moving kernel source files to driver directory..."
+    cp -r kernel/* .
+    rm -rf kernel .github .gitignore LICENSE website userspace CONTRIBUTING.md README.md docs manager 2>/dev/null || true
+    log_info "Kernel source files moved successfully"
 }
 
 # Apply version fix for Bazel sandbox
 apply_version_fix() {
     local ksu_dir="${KERNEL_DIR}/aosp/drivers/kernelsu"
-    local makefile="${ksu_dir}/kernel/Makefile"
+    local makefile="${ksu_dir}/Makefile"
 
     if [[ ! -f "$makefile" ]]; then
         log_error "KernelSU Makefile not found: $makefile"

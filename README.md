@@ -28,6 +28,11 @@ Custom Android kernel for Google Pixel devices with TTL/HL modification and Kern
 - Android SDK Platform Tools (fastboot)
 - Unlocked bootloader on target device
 
+**Note**: Ensure `repo` is in your PATH:
+```bash
+export PATH="$HOME/bin:$PATH"
+```
+
 ### Build
 
 ```bash
