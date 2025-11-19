@@ -32,7 +32,7 @@ Custom Android kernel for Google Pixel devices with TTL/HL modification and Kern
 
 ```bash
 # Clone this repository
-git clone https://github.com/yourusername/pixel-kernel-hotspot-bypass.git
+git clone https://github.com/carlelieser/pixel-kernel-hotspot-bypass.git
 cd pixel-kernel-hotspot-bypass
 
 # Set up kernel source (downloads ~50GB)
