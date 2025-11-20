@@ -28,8 +28,8 @@ interactive_setup() {
     if command -v adb &> /dev/null && adb devices | grep -q "device$"; then
         log_info "Device detected! Attempting to auto-detect configuration..."
 
-        if [[ -x "${ROOT_DIR}/tools/detect-device-info.sh" ]]; then
-            local detect_output=$("${ROOT_DIR}/tools/detect-device-info.sh" 2>&1 || true)
+        if [[ -x "${ROOT_DIR}/tools/device_info.sh" ]]; then
+            local detect_output=$("${ROOT_DIR}/tools/device_info.sh" 2>&1 || true)
             detected_device=$(echo "$detect_output" | grep "DEVICE_CODENAME=" | cut -d'=' -f2 || true)
             detected_branch=$(echo "$detect_output" | grep "MANIFEST_BRANCH=" | cut -d'=' -f2 || true)
 

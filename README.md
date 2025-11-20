@@ -83,7 +83,7 @@ cp .env.sample .env
 Edit `.env` with your device details. Use the detection script if unsure:
 
 ```bash
-./tools/detect-device-info.sh
+./tools/device_info.sh
 ```
 
 Minimum required settings:
