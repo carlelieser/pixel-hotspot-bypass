@@ -5,18 +5,33 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 init_directories
-load_env
 
-print_divider "Pixel Kernel Build - Complete Workflow"
-log_info ""
-log_info "Device: $DEVICE_CODENAME"
-log_info ""
-log_info "This script will run the complete build process:"
-log_info "  1. Setup kernel source"
-log_info "  2. Configure kernel (includes KernelSU integration)"
-log_info "  3. Build kernel"
-log_info "  4. Flash to device (optional)"
-log_info ""
+# Check if .env exists, if not, inform user that setup will create it
+if [[ ! -f "${ROOT_DIR}/.env" ]]; then
+    print_divider "Pixel Kernel Build - Complete Workflow"
+    log_info ""
+    log_info "No configuration found. The setup wizard will guide you through"
+    log_info "creating your build configuration."
+    log_info ""
+    log_info "This script will run the complete build process:"
+    log_info "  1. Setup kernel source (includes interactive configuration)"
+    log_info "  2. Configure kernel (includes KernelSU integration)"
+    log_info "  3. Build kernel"
+    log_info "  4. Flash to device (optional)"
+    log_info ""
+else
+    load_env
+    print_divider "Pixel Kernel Build - Complete Workflow"
+    log_info ""
+    log_info "Device: $DEVICE_CODENAME"
+    log_info ""
+    log_info "This script will run the complete build process:"
+    log_info "  1. Setup kernel source"
+    log_info "  2. Configure kernel (includes KernelSU integration)"
+    log_info "  3. Build kernel"
+    log_info "  4. Flash to device (optional)"
+    log_info ""
+fi
 
 if ! ask_confirmation "Continue with complete build?"; then
     log_info "Aborted by user"
@@ -45,6 +60,10 @@ run_step() {
 
 main() {
     run_step "1" "Setup Kernel Source" "setup.sh"
+
+    # Load .env after setup (in case it was just created)
+    load_env
+
     run_step "2" "Configure Kernel" "configure.sh"
     run_step "3" "Build Kernel" "build.sh"
 

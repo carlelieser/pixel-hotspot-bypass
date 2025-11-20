@@ -139,16 +139,6 @@ EOF
     log_info ""
 }
 
-load_env
-validate_env_vars "DEVICE_CODENAME" "MANIFEST_BRANCH" "MANIFEST_URL" "BAZEL_CONFIG" "BUILD_TARGET"
-
-DEVICE="${DEVICE_CODENAME}"
-KERNEL_DIR="${ROOT_DIR}/kernel-${DEVICE}"
-
-log_info "Setting up kernel for device: $DEVICE"
-log_info "Kernel directory: $KERNEL_DIR"
-log_info "Manifest branch: $MANIFEST_BRANCH"
-
 check_prerequisites() {
     log_info "Checking prerequisites..."
     check_commands repo git python3
@@ -242,6 +232,17 @@ EOF
 
 main() {
     interactive_setup
+
+    load_env
+    validate_env_vars "DEVICE_CODENAME" "MANIFEST_BRANCH" "MANIFEST_URL" "BAZEL_CONFIG" "BUILD_TARGET"
+
+    DEVICE="${DEVICE_CODENAME}"
+    KERNEL_DIR="${ROOT_DIR}/kernel-${DEVICE}"
+
+    log_info "Setting up kernel for device: $DEVICE"
+    log_info "Kernel directory: $KERNEL_DIR"
+    log_info "Manifest branch: $MANIFEST_BRANCH"
+
     check_prerequisites
     setup_kernel_source
     patch_kleaf
