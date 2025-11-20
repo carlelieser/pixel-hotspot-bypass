@@ -21,6 +21,9 @@ bazel-*
 *.tmp
 *.bak
 
+# Environment configuration
+.env
+
 # Python
 __pycache__/
 *.pyc

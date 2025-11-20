@@ -15,11 +15,19 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Configuration
-KERNELSU_REPO="https://github.com/rifsxd/KernelSU-Next"
-KERNELSU_BRANCH="next"
-KSU_VERSION="12882"
-KSU_VERSION_TAG="v1.1.1"
+# Load environment variables from .env if it exists
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+    log_info "Loading configuration from .env"
+    set -a  # automatically export all variables
+    source "${ROOT_DIR}/.env"
+    set +a
+fi
+
+# Configuration (defaults, can be overridden by .env)
+KERNELSU_REPO="${KERNELSU_REPO:-https://github.com/rifsxd/KernelSU-Next}"
+KERNELSU_BRANCH="${KERNELSU_BRANCH:-next}"
+KSU_VERSION="${KSU_VERSION:-12882}"
+KSU_VERSION_TAG="${KSU_VERSION_TAG:-v1.1.1}"
 
 # Find kernel directory
 find_kernel_dir() {

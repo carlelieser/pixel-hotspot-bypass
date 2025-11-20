@@ -15,9 +15,18 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Default values
-DEVICE="${1:-tegu}"
+# Load environment variables from .env if it exists
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+    log_info "Loading configuration from .env"
+    set -a  # automatically export all variables
+    source "${ROOT_DIR}/.env"
+    set +a
+fi
+
+# Default values (can be overridden by .env)
+DEVICE="${1:-${DEVICE_CODENAME:-tegu}}"
 CLEAN_BUILD="${CLEAN_BUILD:-0}"
+LTO="${LTO:-none}"
 
 # Load device configuration
 DEVICE_CONFIG="${ROOT_DIR}/devices/${DEVICE}/device.sh"

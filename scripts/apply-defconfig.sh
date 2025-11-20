@@ -15,8 +15,17 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Default values
-DEVICE="${1:-tegu}"
+# Load environment variables from .env if it exists
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+    log_info "Loading configuration from .env"
+    set -a  # automatically export all variables
+    source "${ROOT_DIR}/.env"
+    set +a
+fi
+
+# Default values (can be overridden by .env)
+DEVICE="${1:-${DEVICE_CODENAME:-tegu}}"
+AUTO_EXPUNGE="${AUTO_EXPUNGE:-0}"
 
 # Load device configuration
 DEVICE_CONFIG="${ROOT_DIR}/devices/${DEVICE}/device.sh"
@@ -162,9 +171,17 @@ invalidate_bazel_cache() {
         log_info "Touched $makefile to invalidate kernel cache"
     fi
 
-    # Also recommend full clean for guaranteed rebuild
-    log_warn "IMPORTANT: For guaranteed rebuild, run:"
-    log_warn "  cd ${KERNEL_DIR} && tools/bazel clean --expunge"
+    # Optionally run full expunge if AUTO_EXPUNGE is enabled
+    if [[ "$AUTO_EXPUNGE" == "1" ]]; then
+        log_info "Running bazel clean --expunge (AUTO_EXPUNGE=1)..."
+        cd "$KERNEL_DIR"
+        tools/bazel clean --expunge
+        log_info "Bazel cache fully cleared"
+    else
+        log_warn "IMPORTANT: For guaranteed rebuild, either:"
+        log_warn "  1. Set AUTO_EXPUNGE=1 in .env, or"
+        log_warn "  2. Manually run: cd ${KERNEL_DIR} && tools/bazel clean --expunge"
+    fi
 }
 
 # Main

@@ -15,11 +15,24 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Default values
-DEVICE="${1:-tegu}"
+# Load environment variables from .env if it exists
+ENV_MANIFEST_BRANCH=""
+ENV_MANIFEST_URL=""
+if [[ -f "${ROOT_DIR}/.env" ]]; then
+    log_info "Loading configuration from .env"
+    set -a  # automatically export all variables
+    source "${ROOT_DIR}/.env"
+    set +a
+    # Save .env values to override device.sh defaults
+    ENV_MANIFEST_BRANCH="$MANIFEST_BRANCH"
+    ENV_MANIFEST_URL="$MANIFEST_URL"
+fi
+
+# Default values (can be overridden by .env or command line)
+DEVICE="${1:-${DEVICE_CODENAME:-tegu}}"
 KERNEL_DIR="${ROOT_DIR}/kernel-${DEVICE}"
 
-# Load device configuration
+# Load device configuration (provides defaults)
 DEVICE_CONFIG="${ROOT_DIR}/devices/${DEVICE}/device.sh"
 if [[ ! -f "$DEVICE_CONFIG" ]]; then
     log_error "Device configuration not found: $DEVICE_CONFIG"
@@ -28,6 +41,15 @@ if [[ ! -f "$DEVICE_CONFIG" ]]; then
 fi
 
 source "$DEVICE_CONFIG"
+
+# Override device config values with .env values if they were set
+if [[ -n "$ENV_MANIFEST_BRANCH" ]]; then
+    MANIFEST_BRANCH="$ENV_MANIFEST_BRANCH"
+    log_info "Using MANIFEST_BRANCH from .env"
+fi
+if [[ -n "$ENV_MANIFEST_URL" ]]; then
+    MANIFEST_URL="$ENV_MANIFEST_URL"
+fi
 
 log_info "Setting up kernel for device: $DEVICE"
 log_info "Kernel directory: $KERNEL_DIR"
