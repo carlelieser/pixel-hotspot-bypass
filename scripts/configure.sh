@@ -64,13 +64,13 @@ apply_bazel_version_fix() {
     cp "$makefile" "${makefile}.bak"
 
     local temp_file=$(mktemp)
-    cat > "$temp_file" << EOF
+    cat > "$temp_file" << 'EOF'
 # Version hardcoded for Bazel sandbox compatibility
 # Bazel's sandbox doesn't include .git, breaking git-based version detection
-ccflags-y += -DKSU_VERSION=${KSU_VERSION}
-ccflags-y += -DKSU_VERSION_TAG="${KSU_VERSION_TAG}"
-
 EOF
+    echo "ccflags-y += -DKSU_VERSION=${KSU_VERSION}" >> "$temp_file"
+    echo "ccflags-y += -DKSU_VERSION_TAG='\"${KSU_VERSION_TAG}\"'" >> "$temp_file"
+    echo "" >> "$temp_file"
     cat "$makefile" >> "$temp_file"
     mv "$temp_file" "$makefile"
 
@@ -172,8 +172,8 @@ apply_defconfig_changes() {
     local to_add=()
 
     for config_name in "${!configs[@]}"; do
-        apply_or_fix_config "$defconfig_path" "$config_name" "${configs[$config_name]}"
-        local result=$?
+        result=0
+        apply_or_fix_config "$defconfig_path" "$config_name" "${configs[$config_name]}" || result=$?
 
         if [[ $result -eq 1 ]]; then
             modified=true
@@ -230,8 +230,8 @@ apply_gki_defconfig_changes() {
 
     # CONFIG_KSU not added to gki_defconfig: KernelSU has "default y" in Kconfig,
     # so savedefconfig removes explicit entries, causing validation to fail
-    apply_or_fix_config "$gki_defconfig" "CONFIG_NETFILTER_XT_TARGET_HL" "y"
-    local result=$?
+    result=0
+    apply_or_fix_config "$gki_defconfig" "CONFIG_NETFILTER_XT_TARGET_HL" "y" || result=$?
 
     if [[ $result -eq 2 ]]; then
         log_info "Adding CONFIG_NETFILTER_XT_TARGET_HL to GKI defconfig..."
