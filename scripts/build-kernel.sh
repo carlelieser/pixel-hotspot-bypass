@@ -73,11 +73,12 @@ run_build() {
     log_info "LTO mode: $lto_mode"
 
     # Run Bazel build
-    # Note: Android 16 doesn't have --config=no_download_gki
+    # use_source_tree_aosp builds GKI from source instead of downloading prebuilt
     tools/bazel --bazelrc="private/devices/google/${DEVICE}/device.bazelrc" \
         build \
         --lto="$lto_mode" \
         --config="${BAZEL_CONFIG}" \
+        --config=use_source_tree_aosp \
         "//private/devices/google/${DEVICE}:${BUILD_TARGET}"
 
     log_info "Build completed successfully!"

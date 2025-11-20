@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Build #7 booted but using downloaded GKI kernel** - Need to build kernel from source
+**Build #8 completed successfully** - GKI built from source with KernelSU-Next v10206
 
 ## Current Tasks
 
@@ -24,7 +24,8 @@
 - [x] Update apply-defconfig.sh to prevent caching issues
 - [x] Fix build scripts for Android 16 compatibility
 - [x] Flash Build #7 and test on device - **BOOTED but GKI not customized**
-- [ ] Build #8 - Build kernel from source (not downloaded GKI)
+- [x] Build #8 - Build kernel from source (not downloaded GKI) - **SUCCESS**
+- [ ] Flash Build #8 and verify KernelSU works
 
 ## Critical Discovery
 
@@ -44,6 +45,7 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 | #5b | android16 | BUILD_AOSP_KERNEL=1 + disable-verification | **BOOTED** |
 | #6 | android16 | KernelSU + TTL (cached build) | Booted but configs not compiled |
 | #7 | android16 | KernelSU + TTL (clean rebuild) | Booted but GKI not customized |
+| #8 | android16 | KernelSU + TTL (GKI from source) | **SUCCESS** - KernelSU v10206 |
 
 ## Root Cause Analysis
 
@@ -69,12 +71,13 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 - Fix: Patch `kernel_filegroup.bzl` to add `strip_modules`, `config_env_and_outputs_info`, `module_kconfig`
 - Script fix: setup-kernel.sh now patches Kleaf automatically
 
-### Issue 5: GKI Downloaded Instead of Built (Active)
+### Issue 5: GKI Downloaded Instead of Built (Fixed)
 - Bazel downloads prebuilt GKI kernel instead of building from source
 - Build #7 configs only apply to device modules, not kernel itself
 - Device running: `6.1.124-android14-11-g8d713f9e8e7b-ab13202960` (Mar 2025 GKI)
 - CONFIG_KSU and CONFIG_NETFILTER_XT_TARGET_HL not in running kernel
-- Need to build GKI from source with our modifications
+- **Fix**: Use `--config=use_source_tree_aosp` to build GKI from source
+- Build #8 successfully compiled KernelSU-Next v10206 into kernel
 
 ### Issue 6: No vendor_kernel_boot Partition
 - Pixel 9a does not have `vendor_kernel_boot` partition

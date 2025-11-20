@@ -93,27 +93,43 @@ apply_gki_defconfig_changes() {
         return 0
     fi
 
-    # Check if TTL config exists
-    if grep -q "CONFIG_NETFILTER_XT_TARGET_HL" "$gki_defconfig"; then
-        log_info "TTL config already in GKI defconfig"
-        return 0
-    fi
-
-    log_info "Adding TTL config to GKI defconfig..."
-
     # Create backup
     cp "$gki_defconfig" "${gki_defconfig}.bak"
 
-    # Insert after CONFIG_NETFILTER_XT_TARGET_DSCP=y to maintain alphabetical order
-    # This is required for Bazel's defconfig validation (savedefconfig check)
-    if grep -q "CONFIG_NETFILTER_XT_TARGET_DSCP=y" "$gki_defconfig"; then
-        sed -i '/^CONFIG_NETFILTER_XT_TARGET_DSCP=y$/a CONFIG_NETFILTER_XT_TARGET_HL=y' "$gki_defconfig"
+    local modified=0
+
+    # Add KernelSU config
+    if grep -q "^CONFIG_KSU=y" "$gki_defconfig"; then
+        log_info "KernelSU config already in GKI defconfig"
     else
-        log_warn "CONFIG_NETFILTER_XT_TARGET_DSCP not found, appending CONFIG_NETFILTER_XT_TARGET_HL at end"
-        echo "CONFIG_NETFILTER_XT_TARGET_HL=y" >> "$gki_defconfig"
+        log_info "Adding KernelSU config to GKI defconfig..."
+        # Add at end of file
+        echo "" >> "$gki_defconfig"
+        echo "# KernelSU-Next support" >> "$gki_defconfig"
+        echo "CONFIG_KSU=y" >> "$gki_defconfig"
+        modified=1
     fi
 
-    log_info "GKI defconfig modifications applied"
+    # Add TTL config
+    if grep -q "^CONFIG_NETFILTER_XT_TARGET_HL=y" "$gki_defconfig"; then
+        log_info "TTL config already in GKI defconfig"
+    else
+        log_info "Adding TTL config to GKI defconfig..."
+        # Insert after CONFIG_NETFILTER_XT_TARGET_DSCP=y to maintain alphabetical order
+        if grep -q "CONFIG_NETFILTER_XT_TARGET_DSCP=y" "$gki_defconfig"; then
+            sed -i '/^CONFIG_NETFILTER_XT_TARGET_DSCP=y$/a CONFIG_NETFILTER_XT_TARGET_HL=y' "$gki_defconfig"
+        else
+            log_warn "CONFIG_NETFILTER_XT_TARGET_DSCP not found, appending CONFIG_NETFILTER_XT_TARGET_HL at end"
+            echo "CONFIG_NETFILTER_XT_TARGET_HL=y" >> "$gki_defconfig"
+        fi
+        modified=1
+    fi
+
+    if [[ $modified -eq 1 ]]; then
+        log_info "GKI defconfig modifications applied"
+    else
+        log_info "GKI defconfig already up to date"
+    fi
 }
 
 # Verify configurations

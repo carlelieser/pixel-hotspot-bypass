@@ -126,11 +126,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Build with Bazel
+# use_source_tree_aosp builds GKI from source instead of downloading prebuilt
 LTO="${LTO:-none}"
 tools/bazel --bazelrc="private/devices/google/DEVICE_CODENAME/device.bazelrc" \
     build \
     --lto="$LTO" \
     --config=DEVICE_CONFIG \
+    --config=use_source_tree_aosp \
     //private/devices/google/DEVICE_CODENAME:DEVICE_BUILD_TARGET
 
 echo "Build complete! Output in out/DEVICE_CODENAME/dist/"
