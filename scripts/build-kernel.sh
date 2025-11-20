@@ -76,7 +76,7 @@ run_build() {
     tools/bazel run \
         --config=stamp \
         --config="${BAZEL_CONFIG}" \
-        --config=no_download_gki \
+        --lto="${LTO}" \
         "//private/devices/google/${DEVICE}:${BUILD_TARGET}"
 
     log_info "Build completed successfully!"

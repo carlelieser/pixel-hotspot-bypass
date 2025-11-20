@@ -8,12 +8,12 @@ SOC="zumapro"
 SOC_NAME="Tensor G4"
 
 # Kernel version
-KERNEL_VERSION="6.1.99"
-ANDROID_VERSION="android14-11"
+KERNEL_VERSION="6.1"
+ANDROID_VERSION="android16"
 
 # Manifest for repo init
 MANIFEST_URL="https://android.googlesource.com/kernel/manifest"
-MANIFEST_BRANCH="android-gs-tegu-6.1-android15-d4"
+MANIFEST_BRANCH="android-gs-tegu-6.1-android16"
 
 # Build configuration
 BAZEL_CONFIG="tegu"

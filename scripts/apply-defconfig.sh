@@ -142,6 +142,23 @@ verify_configs() {
     log_info "All required configs present"
 }
 
+# Invalidate Bazel cache to ensure config changes are compiled
+invalidate_bazel_cache() {
+    log_info "Invalidating Bazel cache to ensure config changes are compiled..."
+
+    # Touch a tracked source file to invalidate the kernel build cache
+    # Bazel doesn't track defconfig changes, so we need to force a rebuild
+    local makefile="${KERNEL_DIR}/aosp/Makefile"
+    if [[ -f "$makefile" ]]; then
+        touch "$makefile"
+        log_info "Touched $makefile to invalidate kernel cache"
+    fi
+
+    # Also recommend full clean for guaranteed rebuild
+    log_warn "IMPORTANT: For guaranteed rebuild, run:"
+    log_warn "  cd ${KERNEL_DIR} && tools/bazel clean --expunge"
+}
+
 # Main
 main() {
     if [[ ! -d "$KERNEL_DIR" ]]; then
@@ -153,6 +170,7 @@ main() {
     apply_defconfig_changes
     apply_gki_defconfig_changes
     verify_configs
+    invalidate_bazel_cache
 
     log_info ""
     log_info "Defconfig modifications complete!"
