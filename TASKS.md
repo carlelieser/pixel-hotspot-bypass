@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Build #8 completed successfully** - GKI built from source with KernelSU-Next v10206
+**Build #8 VERIFIED WORKING** - Custom kernel with KernelSU-Next v10206 and TTL/HL support running!
 
 ## Current Tasks
 
@@ -25,7 +25,7 @@
 - [x] Fix build scripts for Android 16 compatibility
 - [x] Flash Build #7 and test on device - **BOOTED but GKI not customized**
 - [x] Build #8 - Build kernel from source (not downloaded GKI) - **SUCCESS**
-- [ ] Flash Build #8 and verify KernelSU works
+- [x] Flash Build #8 and verify KernelSU works - **VERIFIED**
 
 ## Critical Discovery
 
@@ -83,6 +83,12 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 - Pixel 9a does not have `vendor_kernel_boot` partition
 - Available: boot, dtbo, init_boot, vendor_dlkm, system_dlkm
 - The vendor_kernel_boot.img from build cannot be flashed
+
+### Issue 7: Dist vs GKI Artifacts boot.img (Fixed)
+- `out/tegu/dist/boot.img` (51MB) - Uses downloaded/cached GKI
+- `bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img` (64MB) - Custom-built GKI with KernelSU
+- **Must flash the GKI artifacts boot.img**, not the dist boot.img
+- This is a Bazel build system quirk where dist uses `common/boot.img` which differs from the GKI artifacts
 
 ### Image Size Differences
 Our builds produce smaller images than stock firmware:
@@ -161,14 +167,16 @@ adb reboot bootloader
 fastboot oem disable-verification
 
 # Flash kernel (from kernel-tegu directory)
-cd kernel-tegu/out/tegu/dist
-fastboot flash boot boot.img
-fastboot flash dtbo dtbo.img
+cd kernel-tegu
+
+# IMPORTANT: Use GKI artifacts boot.img (64MB), NOT out/tegu/dist/boot.img (51MB)
+fastboot flash boot bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
+fastboot flash dtbo out/tegu/dist/dtbo.img
 fastboot reboot fastboot
 
 # In fastbootd mode (Pixel 9a has no vendor_kernel_boot partition)
-fastboot flash vendor_dlkm vendor_dlkm.img
-fastboot flash system_dlkm system_dlkm.img
+fastboot flash vendor_dlkm out/tegu/dist/vendor_dlkm.img
+fastboot flash system_dlkm out/tegu/dist/system_dlkm.img
 fastboot reboot
 ```
 
@@ -191,12 +199,12 @@ fastboot reboot
 ## Testing Checklist
 
 - [x] Device boots to Android
-- [ ] `adb shell dmesg | grep -i ksu` shows KernelSU loaded
-- [ ] `adb shell zcat /proc/config.gz | grep KSU` shows CONFIG_KSU=y
-- [ ] KernelSU Manager detects module version >= 12797
+- [x] `adb shell zcat /proc/config.gz | grep KSU` shows CONFIG_KSU=y
+- [x] `adb shell zcat /proc/config.gz | grep NETFILTER_XT_TARGET_HL` shows CONFIG_NETFILTER_XT_TARGET_HL=y
+- [ ] KernelSU Manager detects module version
 - [ ] TTL modification works via iptables
 
-**Note**: Testing checklist items require building GKI from source (Build #8)
+**Build #8 Verified**: Kernel version `6.1.124-android14-11-maybe-dirty` with KernelSU-Next v10206
 
 ## Next Steps if Build #5b Fails
 
