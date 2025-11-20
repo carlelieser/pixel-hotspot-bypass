@@ -2,7 +2,11 @@
 
 ## Current Status
 
-**Build #8 VERIFIED WORKING** - Custom kernel with KernelSU-Next v10206 and TTL/HL support running!
+**Build #9 END-TO-END TEST SUCCESSFUL** - Complete workflow verified from scratch!
+- Flashed stock firmware (BP3A.251105.015)
+- Followed README instructions step-by-step
+- Built kernel with KernelSU-Next v10209 and TTL/HL support
+- All features verified working
 
 ## Current Tasks
 
@@ -26,6 +30,10 @@
 - [x] Flash Build #7 and test on device - **BOOTED but GKI not customized**
 - [x] Build #8 - Build kernel from source (not downloaded GKI) - **SUCCESS**
 - [x] Flash Build #8 and verify KernelSU works - **VERIFIED**
+- [x] Flash stock firmware BP3A.251105.015 for clean test
+- [x] Build #9 - Follow README from scratch (fresh kernel source) - **SUCCESS**
+- [x] Flash Build #9 with correct sequence (boot + vendor_kernel_boot + dtbo + dlkm partitions) - **BOOTED**
+- [x] Verify all features: KernelSU root, TTL/HL modification - **ALL WORKING**
 
 ## Critical Discovery
 
@@ -46,6 +54,7 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 | #6 | android16 | KernelSU + TTL (cached build) | Booted but configs not compiled |
 | #7 | android16 | KernelSU + TTL (clean rebuild) | Booted but GKI not customized |
 | #8 | android16 | KernelSU + TTL (GKI from source) | **SUCCESS** - KernelSU v10206 |
+| #9 | android16 | KernelSU + TTL (fresh build from README) | **SUCCESS** - KernelSU v10209 + TTL/HL verified |
 
 ## Root Cause Analysis
 
@@ -79,10 +88,13 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 - **Fix**: Use `--config=use_source_tree_aosp` to build GKI from source
 - Build #8 successfully compiled KernelSU-Next v10206 into kernel
 
-### Issue 6: No vendor_kernel_boot Partition
-- Pixel 9a does not have `vendor_kernel_boot` partition
-- Available: boot, dtbo, init_boot, vendor_dlkm, system_dlkm
-- The vendor_kernel_boot.img from build cannot be flashed
+### Issue 6: vendor_kernel_boot.img Missing from Flash Sequence (Fixed)
+- **Critical**: Pixel 9a DOES have a vendor_kernel_boot partition (contrary to initial assumption)
+- Build produces: `bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img` (8.4MB)
+- First Build #9 flash attempt bootlooped because vendor_kernel_boot.img was NOT flashed
+- **Fix**: Must flash vendor_kernel_boot.img from bootloader BEFORE rebooting to fastbootd
+- Correct bootloader flash sequence: boot.img, dtbo.img, vendor_kernel_boot.img
+- Then reboot to fastbootd and flash: vendor_dlkm.img, system_dlkm.img
 
 ### Issue 7: Dist vs GKI Artifacts boot.img (Fixed)
 - `out/tegu/dist/boot.img` (51MB) - Uses downloaded/cached GKI
@@ -113,12 +125,12 @@ This is a ONE-TIME prerequisite before any custom kernel flashing.
 
 ### 3. Correct Flash Sequence (Pixel 9a)
 1. Boot to bootloader: `adb reboot bootloader`
-2. Flash boot partitions: `fastboot flash boot boot.img && fastboot flash dtbo dtbo.img`
+2. Flash boot partitions: `fastboot flash boot boot.img && fastboot flash dtbo dtbo.img && fastboot flash vendor_kernel_boot vendor_kernel_boot.img`
 3. Reboot to fastbootd: `fastboot reboot fastboot`
 4. Flash dynamic partitions: `fastboot flash vendor_dlkm vendor_dlkm.img && fastboot flash system_dlkm system_dlkm.img`
 5. Reboot: `fastboot reboot`
 
-**Note**: Pixel 9a does not have vendor_kernel_boot partition
+**CRITICAL**: vendor_kernel_boot.img MUST be flashed in step 2, otherwise device will bootloop!
 
 ### 4. Bazel Caching with Defconfig Changes
 - Bazel does NOT automatically detect defconfig changes
@@ -149,15 +161,16 @@ This is a ONE-TIME prerequisite before any custom kernel flashing.
 
 ## Goals
 
-### Short-term
-- Get kernel to boot successfully on Pixel 9a
-- Verify KernelSU-Next functionality
-- Verify TTL/HL bypass works
+### Short-term (COMPLETED ✓)
+- [x] Get kernel to boot successfully on Pixel 9a
+- [x] Verify KernelSU-Next functionality
+- [x] Verify TTL/HL bypass works
+- [x] End-to-end test following README from scratch
 
 ### Long-term
-- Stable kernel with all features working
-- Document the working configuration
-- Create AnyKernel3 package for easier flashing
+- [x] Stable kernel with all features working
+- [x] Document the working configuration
+- [ ] Create AnyKernel3 package for easier flashing
 
 ## Flash Commands
 
@@ -170,13 +183,15 @@ fastboot oem disable-verification
 cd kernel-tegu
 
 # IMPORTANT: Use GKI artifacts boot.img (64MB), NOT out/tegu/dist/boot.img (51MB)
+# CRITICAL: Must flash vendor_kernel_boot.img in bootloader mode!
 fastboot flash boot bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
-fastboot flash dtbo out/tegu/dist/dtbo.img
+fastboot flash dtbo bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img
+fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
 fastboot reboot fastboot
 
-# In fastbootd mode (Pixel 9a has no vendor_kernel_boot partition)
-fastboot flash vendor_dlkm out/tegu/dist/vendor_dlkm.img
-fastboot flash system_dlkm out/tegu/dist/system_dlkm.img
+# In fastbootd mode
+fastboot flash vendor_dlkm bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img
+fastboot flash system_dlkm bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img
 fastboot reboot
 ```
 
@@ -205,7 +220,12 @@ fastboot reboot
 - [x] TTL modification works via iptables (`iptables -t mangle -A POSTROUTING -j TTL --ttl-set 65`)
 - [x] HL modification works via ip6tables (`ip6tables -t mangle -A POSTROUTING -j HL --hl-set 65`)
 
-**Build #8 Verified**: Kernel version `6.1.124-android14-11-maybe-dirty` with KernelSU-Next v10206
+**Build #9 Verified (End-to-End Test)**:
+- Kernel version: `6.1.124-android14-11-maybe-dirty`
+- KernelSU-Next version: v10209 (from clean build)
+- Root access: uid=0(root) ✓
+- TTL modification: `iptables -t mangle -A POSTROUTING -j TTL --ttl-set 65` ✓
+- HL modification: `ip6tables -t mangle -A POSTROUTING -j HL --hl-set 65` ✓
 
 ## Hotspot Bypass Commands
 

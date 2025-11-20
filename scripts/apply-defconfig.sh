@@ -98,17 +98,9 @@ apply_gki_defconfig_changes() {
 
     local modified=0
 
-    # Add KernelSU config
-    if grep -q "^CONFIG_KSU=y" "$gki_defconfig"; then
-        log_info "KernelSU config already in GKI defconfig"
-    else
-        log_info "Adding KernelSU config to GKI defconfig..."
-        # Add at end of file
-        echo "" >> "$gki_defconfig"
-        echo "# KernelSU-Next support" >> "$gki_defconfig"
-        echo "CONFIG_KSU=y" >> "$gki_defconfig"
-        modified=1
-    fi
+    # Note: CONFIG_KSU is NOT added to gki_defconfig because KernelSU's Kconfig
+    # has "default y", which means it's enabled automatically. Adding it here
+    # causes savedefconfig validation to fail since it would be removed by savedefconfig.
 
     # Add TTL config
     if grep -q "^CONFIG_NETFILTER_XT_TARGET_HL=y" "$gki_defconfig"; then
