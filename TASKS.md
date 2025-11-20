@@ -201,10 +201,20 @@ fastboot reboot
 - [x] Device boots to Android
 - [x] `adb shell zcat /proc/config.gz | grep KSU` shows CONFIG_KSU=y
 - [x] `adb shell zcat /proc/config.gz | grep NETFILTER_XT_TARGET_HL` shows CONFIG_NETFILTER_XT_TARGET_HL=y
-- [ ] KernelSU Manager detects module version
-- [ ] TTL modification works via iptables
+- [x] KernelSU Manager detects module and root works (`su -c 'id'` returns uid=0)
+- [x] TTL modification works via iptables (`iptables -t mangle -A POSTROUTING -j TTL --ttl-set 65`)
+- [x] HL modification works via ip6tables (`ip6tables -t mangle -A POSTROUTING -j HL --hl-set 65`)
 
 **Build #8 Verified**: Kernel version `6.1.124-android14-11-maybe-dirty` with KernelSU-Next v10206
+
+## Hotspot Bypass Commands
+
+For persistent hotspot bypass, use a KernelSU module or boot script:
+```bash
+# Set TTL/HL to 65 to bypass carrier hotspot detection
+iptables -t mangle -A POSTROUTING -j TTL --ttl-set 65
+ip6tables -t mangle -A POSTROUTING -j HL --hl-set 65
+```
 
 ## Next Steps if Build #5b Fails
 
