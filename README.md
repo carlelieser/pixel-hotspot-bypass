@@ -73,8 +73,8 @@ export PATH=$PATH:~/.bin
 ### 1. Setup
 
 ```bash
-git clone https://github.com/yourusername/pixel-kernel-hotspot-bypass.git
-cd pixel-kernel-hotspot-bypass
+git clone https://github.com/yourusername/pixel-hotspot-bypass.git
+cd pixel-hotspot-bypass
 cp .env.sample .env
 ```
 
