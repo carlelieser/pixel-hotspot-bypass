@@ -71,29 +71,55 @@ run_build() {
 
 copy_output() {
     local dist_dir="${KERNEL_DIR}/out/${DEVICE_CODENAME}/dist"
+    local bazel_bin="${KERNEL_DIR}/bazel-bin/private/devices/google/${DEVICE_CODENAME}"
 
-    if [[ ! -d "$dist_dir" ]]; then
-        log_warn "Distribution directory not found: $dist_dir"
-        log_warn "Build output may be in a different location"
+    # Try dist directory first (standard location)
+    if [[ -d "$dist_dir" ]] && [[ -n "$(find "${dist_dir}" -maxdepth 1 -name "*.img" 2>/dev/null)" ]]; then
+        log_info "Found images in dist directory"
+        mkdir -p "$OUTPUT_DIR"
+        cp -v "${dist_dir}"/*.img "$OUTPUT_DIR/"
+        log_info ""
+        log_info "Output files:"
+        ls -lh "$OUTPUT_DIR"/*.img
         return 0
     fi
 
-    mkdir -p "$OUTPUT_DIR"
+    # Fallback: Copy from Bazel output directory
+    if [[ -d "$bazel_bin" ]]; then
+        log_info "Dist directory not found, copying from Bazel output..."
+        mkdir -p "$OUTPUT_DIR"
 
-    log_info "Copying build output to: $OUTPUT_DIR"
+        # Find and copy each required image
+        local images_found=0
+        for img_type in kernel_images_dtbo/dtbo.img kernel_images_boot_images/vendor_kernel_boot.img \
+                        kernel_images_vendor_dlkm_image/vendor_dlkm.img kernel_images_system_dlkm_image/system_dlkm.img; do
+            local img_path="${bazel_bin}/${img_type}"
+            if [[ -f "$img_path" ]]; then
+                local img_name=$(basename "$img_path")
+                cp -v "$img_path" "$OUTPUT_DIR/"
+                ((images_found++))
+            fi
+        done
 
-    local img_count=$(find "${dist_dir}" -maxdepth 1 -name "*.img" 2>/dev/null | wc -l)
-    if [[ $img_count -eq 0 ]]; then
-        log_warn "No .img files found in $dist_dir"
-        return 0
+        # Copy GKI boot image
+        local gki_boot="${KERNEL_DIR}/bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img"
+        if [[ -f "$gki_boot" ]]; then
+            cp -v "$gki_boot" "$OUTPUT_DIR/"
+            ((images_found++))
+        fi
+
+        if [[ $images_found -gt 0 ]]; then
+            log_info ""
+            log_info "Copied $images_found image file(s)"
+            log_info "Output files:"
+            ls -lh "$OUTPUT_DIR"/*.img
+            return 0
+        fi
     fi
 
-    cp -v "${dist_dir}"/*.img "$OUTPUT_DIR/"
-    log_info "Copied $img_count image file(s)"
-
-    log_info ""
-    log_info "Output files:"
-    ls -lh "$OUTPUT_DIR"/*.img
+    log_error "Could not find kernel images in any expected location"
+    log_error "Checked: $dist_dir and $bazel_bin"
+    return 1
 }
 
 main() {
