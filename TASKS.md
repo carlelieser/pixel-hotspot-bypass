@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Rebuilding kernel with clean Bazel cache** - Build in progress (~427/474 actions)
+**Build #7 booted but using downloaded GKI kernel** - Need to build kernel from source
 
 ## Current Tasks
 
@@ -18,10 +18,13 @@
 - [x] Add KernelSU and TTL modifications
 - [x] Test Build #6 with KernelSU + TTL - **BOOTED but configs not compiled**
 - [x] Clean Bazel cache (`tools/bazel clean --expunge`)
-- [ ] Build #7 - Rebuild with clean cache (in progress)
-- [ ] Verify KernelSU config (CONFIG_KSU=y)
-- [ ] Verify TTL config (CONFIG_NETFILTER_XT_TARGET_HL=y)
+- [x] Build #7 - Rebuild with clean cache - **COMPLETED**
+- [x] Verify KernelSU config (CONFIG_KSU=y) - **VERIFIED in build config**
+- [x] Verify TTL config (CONFIG_NETFILTER_XT_TARGET_HL=y) - **VERIFIED in build config**
 - [x] Update apply-defconfig.sh to prevent caching issues
+- [x] Fix build scripts for Android 16 compatibility
+- [x] Flash Build #7 and test on device - **BOOTED but GKI not customized**
+- [ ] Build #8 - Build kernel from source (not downloaded GKI)
 
 ## Critical Discovery
 
@@ -40,7 +43,7 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 | #5 | android16 | BUILD_AOSP_KERNEL=1 | Bootloop (no verification disable) |
 | #5b | android16 | BUILD_AOSP_KERNEL=1 + disable-verification | **BOOTED** |
 | #6 | android16 | KernelSU + TTL (cached build) | Booted but configs not compiled |
-| #7 | android16 | KernelSU + TTL (clean rebuild) | **IN PROGRESS** |
+| #7 | android16 | KernelSU + TTL (clean rebuild) | Booted but GKI not customized |
 
 ## Root Cause Analysis
 
@@ -59,6 +62,24 @@ All previous builds bootlooped because Android Verified Boot (AVB) was rejecting
 - Build #6 used cached kernel from Build #5b (only 92 actions vs 462)
 - Fix: Run `tools/bazel clean --expunge` after config changes
 - Script fix: apply-defconfig.sh now touches aosp/Makefile to invalidate cache
+
+### Issue 4: Kleaf Build System Bug (Fixed)
+- `kernel_filegroup.bzl` missing fields in `KernelBuildExtModuleInfo`
+- Causes error: `'KernelBuildExtModuleInfo' value has no field or method 'strip_modules'`
+- Fix: Patch `kernel_filegroup.bzl` to add `strip_modules`, `config_env_and_outputs_info`, `module_kconfig`
+- Script fix: setup-kernel.sh now patches Kleaf automatically
+
+### Issue 5: GKI Downloaded Instead of Built (Active)
+- Bazel downloads prebuilt GKI kernel instead of building from source
+- Build #7 configs only apply to device modules, not kernel itself
+- Device running: `6.1.124-android14-11-g8d713f9e8e7b-ab13202960` (Mar 2025 GKI)
+- CONFIG_KSU and CONFIG_NETFILTER_XT_TARGET_HL not in running kernel
+- Need to build GKI from source with our modifications
+
+### Issue 6: No vendor_kernel_boot Partition
+- Pixel 9a does not have `vendor_kernel_boot` partition
+- Available: boot, dtbo, init_boot, vendor_dlkm, system_dlkm
+- The vendor_kernel_boot.img from build cannot be flashed
 
 ### Image Size Differences
 Our builds produce smaller images than stock firmware:
@@ -81,13 +102,14 @@ fastboot oem disable-verification
 ```
 This is a ONE-TIME prerequisite before any custom kernel flashing.
 
-### 3. Correct Flash Sequence
+### 3. Correct Flash Sequence (Pixel 9a)
 1. Boot to bootloader: `adb reboot bootloader`
 2. Flash boot partitions: `fastboot flash boot boot.img && fastboot flash dtbo dtbo.img`
-3. Flash vendor_kernel_boot: `fastboot flash vendor_kernel_boot vendor_kernel_boot.img`
-4. Reboot to fastbootd: `fastboot reboot fastboot`
-5. Flash dynamic partitions: `fastboot flash vendor_dlkm vendor_dlkm.img && fastboot flash system_dlkm system_dlkm.img`
-6. Reboot: `fastboot reboot`
+3. Reboot to fastbootd: `fastboot reboot fastboot`
+4. Flash dynamic partitions: `fastboot flash vendor_dlkm vendor_dlkm.img && fastboot flash system_dlkm system_dlkm.img`
+5. Reboot: `fastboot reboot`
+
+**Note**: Pixel 9a does not have vendor_kernel_boot partition
 
 ### 4. Bazel Caching with Defconfig Changes
 - Bazel does NOT automatically detect defconfig changes
@@ -135,14 +157,13 @@ This is a ONE-TIME prerequisite before any custom kernel flashing.
 adb reboot bootloader
 fastboot oem disable-verification
 
-# Flash kernel
-cd out/tegu-full-source
+# Flash kernel (from kernel-tegu directory)
+cd kernel-tegu/out/tegu/dist
 fastboot flash boot boot.img
 fastboot flash dtbo dtbo.img
 fastboot reboot fastboot
 
-# In fastbootd mode
-fastboot flash vendor_kernel_boot vendor_kernel_boot.img
+# In fastbootd mode (Pixel 9a has no vendor_kernel_boot partition)
 fastboot flash vendor_dlkm vendor_dlkm.img
 fastboot flash system_dlkm system_dlkm.img
 fastboot reboot
@@ -162,15 +183,17 @@ fastboot reboot
 ### Official Google Requirements
 - Manifest: `android-gs-tegu-6.1-android16`
 - Must disable verification before flashing
-- Flash partitions: boot, dtbo, vendor_kernel_boot, vendor_dlkm, system_dlkm
+- Flash partitions: boot, dtbo, vendor_dlkm, system_dlkm (no vendor_kernel_boot on Pixel 9a)
 
 ## Testing Checklist
 
-- [ ] Device boots to Android
+- [x] Device boots to Android
 - [ ] `adb shell dmesg | grep -i ksu` shows KernelSU loaded
 - [ ] `adb shell zcat /proc/config.gz | grep KSU` shows CONFIG_KSU=y
 - [ ] KernelSU Manager detects module version >= 12797
 - [ ] TTL modification works via iptables
+
+**Note**: Testing checklist items require building GKI from source (Build #8)
 
 ## Next Steps if Build #5b Fails
 

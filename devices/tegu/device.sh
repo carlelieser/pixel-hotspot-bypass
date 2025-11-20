@@ -8,7 +8,7 @@ SOC="zumapro"
 SOC_NAME="Tensor G4"
 
 # Kernel version
-KERNEL_VERSION="6.1"
+KERNEL_VERSION="6.1.99"
 ANDROID_VERSION="android16"
 
 # Manifest for repo init

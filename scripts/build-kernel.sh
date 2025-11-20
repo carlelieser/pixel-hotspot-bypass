@@ -69,14 +69,15 @@ run_build() {
     log_info "Bazel config: ${BAZEL_CONFIG}"
 
     # Set LTO mode (none for faster builds)
-    export LTO="${LTO:-none}"
-    log_info "LTO mode: $LTO"
+    local lto_mode="${LTO:-none}"
+    log_info "LTO mode: $lto_mode"
 
     # Run Bazel build
-    tools/bazel run \
-        --config=stamp \
+    # Note: Android 16 doesn't have --config=no_download_gki
+    tools/bazel --bazelrc="private/devices/google/${DEVICE}/device.bazelrc" \
+        build \
+        --lto="$lto_mode" \
         --config="${BAZEL_CONFIG}" \
-        --lto="${LTO}" \
         "//private/devices/google/${DEVICE}:${BUILD_TARGET}"
 
     log_info "Build completed successfully!"
@@ -84,7 +85,7 @@ run_build() {
 
 # Copy output files
 copy_output() {
-    local dist_dir="${KERNEL_DIR}/out/dist"
+    local dist_dir="${KERNEL_DIR}/out/${DEVICE}/dist"
 
     if [[ ! -d "$dist_dir" ]]; then
         log_warn "Distribution directory not found: $dist_dir"

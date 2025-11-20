@@ -78,6 +78,39 @@ setup_kernel_source() {
     log_info "Kernel source setup complete"
 }
 
+# Patch Kleaf build system for compatibility
+patch_kleaf() {
+    log_info "Patching Kleaf build system..."
+
+    local filegroup_bzl="${KERNEL_DIR}/build/kernel/kleaf/impl/kernel_filegroup.bzl"
+
+    if [[ ! -f "$filegroup_bzl" ]]; then
+        log_warn "kernel_filegroup.bzl not found, skipping Kleaf patch"
+        return 0
+    fi
+
+    # Check if already patched
+    if grep -q "strip_modules = False" "$filegroup_bzl"; then
+        log_info "Kleaf already patched"
+        return 0
+    fi
+
+    # Add missing fields to KernelBuildExtModuleInfo in kernel_filegroup.bzl
+    # This fixes compatibility issues with the build system
+    sed -i 's/collect_unstripped_modules = ctx.attr.collect_unstripped_modules,$/collect_unstripped_modules = ctx.attr.collect_unstripped_modules,\n        strip_modules = False,/' "$filegroup_bzl"
+
+    # Also add config_env_and_outputs_info and module_kconfig if missing
+    if ! grep -q "config_env_and_outputs_info = ext_mod_env_and_outputs_info" "$filegroup_bzl"; then
+        sed -i 's/modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,$/modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,\n        config_env_and_outputs_info = ext_mod_env_and_outputs_info,/' "$filegroup_bzl"
+    fi
+
+    if ! grep -q "module_kconfig = depset()" "$filegroup_bzl"; then
+        sed -i 's/module_scripts = module_srcs.module_scripts,$/module_scripts = module_srcs.module_scripts,\n        module_kconfig = depset(),/' "$filegroup_bzl"
+    fi
+
+    log_info "Kleaf patched successfully"
+}
+
 # Create build script
 create_build_script() {
     local build_script="${KERNEL_DIR}/build_${DEVICE}.sh"
@@ -94,13 +127,13 @@ cd "$SCRIPT_DIR"
 
 # Build with Bazel
 LTO="${LTO:-none}"
-tools/bazel run \
-    --config=stamp \
+tools/bazel --bazelrc="private/devices/google/DEVICE_CODENAME/device.bazelrc" \
+    build \
+    --lto="$LTO" \
     --config=DEVICE_CONFIG \
-    --config=no_download_gki \
     //private/devices/google/DEVICE_CODENAME:DEVICE_BUILD_TARGET
 
-echo "Build complete! Output in out/dist/"
+echo "Build complete! Output in out/DEVICE_CODENAME/dist/"
 EOF
 
     # Replace placeholders
@@ -116,6 +149,7 @@ EOF
 main() {
     check_prerequisites
     setup_kernel_source
+    patch_kleaf
     create_build_script
 
     log_info "Setup complete!"
