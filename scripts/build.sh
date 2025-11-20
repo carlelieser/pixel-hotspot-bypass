@@ -97,7 +97,7 @@ copy_output() {
             if [[ -f "$img_path" ]]; then
                 local img_name=$(basename "$img_path")
                 cp -v "$img_path" "$OUTPUT_DIR/"
-                ((images_found++))
+                images_found=$((images_found + 1))
             fi
         done
 
@@ -105,7 +105,7 @@ copy_output() {
         local gki_boot="${KERNEL_DIR}/bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img"
         if [[ -f "$gki_boot" ]]; then
             cp -v "$gki_boot" "$OUTPUT_DIR/"
-            ((images_found++))
+            images_found=$((images_found + 1))
         fi
 
         if [[ $images_found -gt 0 ]]; then

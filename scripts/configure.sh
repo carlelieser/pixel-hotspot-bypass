@@ -74,10 +74,33 @@ EOF
     cat "$makefile" >> "$temp_file"
     mv "$temp_file" "$makefile"
 
+    # Disable specific ccflags lines that reference dynamic versions
     sed -i 's/^ccflags-y += -DKSU_VERSION_TAG=.*\$(KSU_VERSION_TAG).*$/#DISABLED &/' "$makefile"
     sed -i 's/^ccflags-y += -DKSU_VERSION_TAG=.*v0\.0\.0.*$/#DISABLED &/' "$makefile"
     sed -i 's/^ccflags-y += -DKSU_VERSION=.*\$(KSU_VERSION)$/#DISABLED &/' "$makefile"
     sed -i '4,$s/^ccflags-y += -DKSU_VERSION=[0-9]*$/#DISABLED &/' "$makefile"
+
+    # Disable the FIRST ifeq/else/endif block (for KSU_VERSION_TAG)
+    # Find the line "obj-$(CONFIG_KSU) += kernelsu.o" and disable everything until the comment about .git
+    sed -i '/^obj-\$(CONFIG_KSU) += kernelsu.o$/,/^# \.git is a text file while/ {
+        /^obj-\$(CONFIG_KSU) += kernelsu.o$/!{
+            /^# \.git is a text file while/!{
+                /^$/!s/^/#DISABLED /
+            }
+        }
+    }' "$makefile"
+
+    # Disable the SECOND ifeq/else/endif block (for KSU_VERSION calculation)
+    sed -i '/^# \.git is a text file while/,/^ifeq (\$(shell grep -q.*current_sid/ {
+        /^# \.git is a text file while/!{
+            /^ifeq (\$(shell grep -q.*current_sid/!{
+                /^$/!s/^/#DISABLED /
+            }
+        }
+    }' "$makefile"
+
+    # Add a comment marker
+    sed -i '/^# \.git is a text file while/a # DISABLED: Git-based version calculation section below - using hardcoded version instead' "$makefile"
 
     log_success "Version fix applied successfully"
 }
@@ -163,6 +186,10 @@ apply_defconfig_changes() {
     fi
 
     declare -A configs=(
+        ["CONFIG_OVERLAY_FS"]="y"
+        ["CONFIG_KPROBES"]="y"
+        ["CONFIG_HAVE_KPROBES"]="y"
+        ["CONFIG_KPROBE_EVENTS"]="y"
         ["CONFIG_KSU"]="y"
         ["CONFIG_NETFILTER_XT_TARGET_HL"]="y"
         ["CONFIG_NETFILTER_ADVANCED"]="y"
@@ -188,6 +215,15 @@ apply_defconfig_changes() {
             echo "" >> "$defconfig_path"
             echo "$MARKER_COMMENT" >> "$defconfig_path"
         fi
+
+        echo "" >> "$defconfig_path"
+        echo "# KernelSU-Next dependencies" >> "$defconfig_path"
+        for dep_config in "CONFIG_OVERLAY_FS" "CONFIG_KPROBES" "CONFIG_HAVE_KPROBES" "CONFIG_KPROBE_EVENTS"; do
+            if [[ " ${to_add[@]} " =~ " ${dep_config} " ]]; then
+                echo "${dep_config}=y" >> "$defconfig_path"
+                log_info "Added ${dep_config}=y"
+            fi
+        done
 
         echo "" >> "$defconfig_path"
         echo "# KernelSU-Next support" >> "$defconfig_path"
@@ -258,6 +294,10 @@ verify_configs() {
     log_info "Verifying configurations..."
 
     local required_configs=(
+        "CONFIG_OVERLAY_FS=y"
+        "CONFIG_KPROBES=y"
+        "CONFIG_HAVE_KPROBES=y"
+        "CONFIG_KPROBE_EVENTS=y"
         "CONFIG_KSU=y"
         "CONFIG_NETFILTER_XT_TARGET_HL=y"
     )
@@ -329,6 +369,10 @@ main() {
     log_info "KernelSU-Next: ${KSU_VERSION} (${KSU_VERSION_TAG})"
     log_info ""
     log_info "Applied configurations:"
+    log_info "  - CONFIG_OVERLAY_FS=y (KernelSU dependency)"
+    log_info "  - CONFIG_KPROBES=y (KernelSU dependency)"
+    log_info "  - CONFIG_HAVE_KPROBES=y (KernelSU dependency)"
+    log_info "  - CONFIG_KPROBE_EVENTS=y (KernelSU dependency)"
     log_info "  - CONFIG_KSU=y (KernelSU-Next)"
     log_info "  - CONFIG_NETFILTER_XT_TARGET_HL=y (TTL/HL modification)"
     log_info "  - CONFIG_NETFILTER_ADVANCED=y (Required dependency)"

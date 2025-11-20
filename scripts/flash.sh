@@ -64,6 +64,7 @@ flash_bootloader_images() {
 
     fastboot flash boot_${slot} boot.img
     fastboot flash dtbo_${slot} dtbo.img
+    fastboot flash vendor_kernel_boot_${slot} vendor_kernel_boot.img
 
     log_info "Bootloader images flashed successfully"
 }
@@ -72,7 +73,7 @@ flash_fastbootd_images() {
     local slot=$(get_current_slot)
 
     log_info "Rebooting to fastbootd for dynamic partitions..."
-    fastboot reboot fastboot
+    timeout 10 fastboot reboot fastboot || true
 
     log_info "Waiting for device to enter fastbootd..."
     sleep 5
@@ -89,7 +90,6 @@ flash_fastbootd_images() {
         log_error "Device did not enter fastbootd mode"
         log_error "Please manually reboot to fastbootd and run:"
         log_error "  cd $OUTPUT_DIR"
-        log_error "  fastboot flash vendor_kernel_boot_${slot} vendor_kernel_boot.img"
         log_error "  fastboot flash vendor_dlkm_${slot} vendor_dlkm.img"
         log_error "  fastboot flash system_dlkm_${slot} system_dlkm.img"
         exit 1
@@ -98,7 +98,6 @@ flash_fastbootd_images() {
     log_info "Flashing dynamic partition images to slot $slot..."
     cd "$OUTPUT_DIR"
 
-    fastboot flash vendor_kernel_boot_${slot} vendor_kernel_boot.img
     fastboot flash vendor_dlkm_${slot} vendor_dlkm.img
     fastboot flash system_dlkm_${slot} system_dlkm.img
 
@@ -129,12 +128,12 @@ print_manual_instructions() {
     log_info "  # Flash bootloader images"
     log_info "  fastboot flash boot_\${SLOT} boot.img"
     log_info "  fastboot flash dtbo_\${SLOT} dtbo.img"
+    log_info "  fastboot flash vendor_kernel_boot_\${SLOT} vendor_kernel_boot.img"
     log_info ""
     log_info "  # Reboot to fastbootd"
     log_info "  fastboot reboot fastboot"
     log_info ""
     log_info "  # Flash dynamic partitions"
-    log_info "  fastboot flash vendor_kernel_boot_\${SLOT} vendor_kernel_boot.img"
     log_info "  fastboot flash vendor_dlkm_\${SLOT} vendor_dlkm.img"
     log_info "  fastboot flash system_dlkm_\${SLOT} system_dlkm.img"
     log_info ""
