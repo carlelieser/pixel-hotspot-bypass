@@ -32,3 +32,5 @@ __pycache__/
 # Claude (personal development)
 .claude/
 CLAUDE.md
+
+.idea/
