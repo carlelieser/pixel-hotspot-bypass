@@ -1,4 +1,4 @@
-# Pixel Kernel Hotspot Bypass
+# Pixel Hotspot Bypass
 
 A collection of scripts for building a customized kernel for Google Pixel devices with [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next) integration and [TTL/HL](https://en.wikipedia.org/wiki/Time_to_live) hotspot bypass support.
 
