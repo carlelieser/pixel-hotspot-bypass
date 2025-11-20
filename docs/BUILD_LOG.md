@@ -1,4 +1,4 @@
-# Tasks & Goals
+---\nHistorical build log from initial development.\nDocuments 9 build attempts and lessons learned.\n---\n\n# Tasks & Goals
 
 ## Current Status
 
@@ -242,4 +242,3 @@ ip6tables -t mangle -A POSTROUTING -j HL --hl-set 65
 2. Compare our boot.img with stock using `unpackbootimg`
 3. Check kernel config differences with stock
 4. Consider using etnperlong's android_kernel_google_tegu source
-

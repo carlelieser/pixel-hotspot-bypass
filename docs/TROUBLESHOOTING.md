@@ -80,6 +80,24 @@ ccflags-y += -DKSU_VERSION_TAG=\"v1.1.1\"
 
 3. Ensure `CONFIG_NETFILTER_ADVANCED=y` is also set (it's a dependency).
 
+### savedefconfig Validation Error
+
+**Error**:
+```
+ERROR: savedefconfig does not match aosp/arch/arm64/configs/gki_defconfig
+```
+
+**Cause**: Adding `CONFIG_KSU=y` to gki_defconfig when KernelSU's Kconfig already has `default y`, causing savedefconfig to remove it as redundant.
+
+**Solution**: Don't add CONFIG_KSU to gki_defconfig - only add it to device defconfig. The `apply-defconfig.sh` script handles this correctly. If manually editing:
+```bash
+# Device defconfig (tegu_defconfig) - ADD this:
+CONFIG_KSU=y
+
+# GKI defconfig (gki_defconfig) - DON'T add CONFIG_KSU, only add:
+CONFIG_NETFILTER_XT_TARGET_HL=y
+```
+
 ### Bazel Cache Issues
 
 **Symptom**: Changes not taking effect, old errors persist.
@@ -244,15 +262,37 @@ iptables: No chain/target/match by that name.
 
 **Symptom**: Device continuously reboots.
 
+**Most Common Cause**: Missing `vendor_kernel_boot.img` flash! Pixel 9a requires ALL THREE boot images (boot, dtbo, vendor_kernel_boot) to be flashed from bootloader mode.
+
 **Solutions**:
 1. Boot to bootloader (hold Power + Volume Down during boot)
 
-2. Flash stock boot image:
+2. Flash vendor_kernel_boot.img if you skipped it:
+   ```bash
+   cd kernel-tegu
+   fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
+   fastboot reboot
+   ```
+
+3. If still looping, flash stock boot image:
    ```bash
    fastboot flash boot /path/to/stock/boot.img
    ```
 
-3. If still looping, try factory reset from bootloader or flash full factory image
+4. If still looping, try factory reset from bootloader or flash full factory image
+
+**Remember**: The correct flash sequence is:
+```bash
+# In bootloader mode
+fastboot flash boot boot.img
+fastboot flash dtbo dtbo.img
+fastboot flash vendor_kernel_boot vendor_kernel_boot.img  # ← Don't forget this!
+fastboot reboot fastboot
+
+# In fastbootd mode
+fastboot flash vendor_dlkm vendor_dlkm.img
+fastboot flash system_dlkm system_dlkm.img
+```
 
 ### WiFi/Cellular Issues After Flash
 

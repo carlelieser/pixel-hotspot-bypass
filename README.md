@@ -5,25 +5,25 @@ Custom Android kernel for Google Pixel devices with TTL/HL modification and Kern
 ## Features
 
 - **TTL/HL Modification**: `CONFIG_NETFILTER_XT_TARGET_HL=y` enabled for iptables TTL/hop-limit mangling
-- **KernelSU-Next**: Root access via [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next) (v1.1.1 / version 12882)
+- **KernelSU-Next**: Root access via [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next) (version 10209+)
 - **Hotspot Bypass**: Works with [unlimited-hotspot](https://github.com/AdisonCavani/unlimited-hotspot) module
 
 ## Supported Devices
 
 | Device | Codename | SoC | Kernel | Status |
 |--------|----------|-----|--------|--------|
-| Pixel 9a | tegu | Tensor G4 (zumapro) | 6.1.99 | Tested |
-| Pixel 9 | tokay | Tensor G4 (zumapro) | 6.1.99 | Untested |
-| Pixel 9 Pro | caiman | Tensor G4 (zumapro) | 6.1.99 | Untested |
-| Pixel 9 Pro XL | komodo | Tensor G4 (zumapro) | 6.1.99 | Untested |
-| Pixel 9 Pro Fold | comet | Tensor G4 (zumapro) | 6.1.99 | Untested |
+| Pixel 9a | tegu | Tensor G4 (zumapro) | 6.1.124 | Tested |
+| Pixel 9 | tokay | Tensor G4 (zumapro) | 6.1.124 | Untested |
+| Pixel 9 Pro | caiman | Tensor G4 (zumapro) | 6.1.124 | Untested |
+| Pixel 9 Pro XL | komodo | Tensor G4 (zumapro) | 6.1.124 | Untested |
+| Pixel 9 Pro Fold | comet | Tensor G4 (zumapro) | 6.1.124 | Untested |
 
 ## Quick Start
 
 ### Prerequisites
 
 - Linux build machine (x86_64) with 16GB+ RAM
-- ~100GB free disk space
+- ~15-20GB free disk space (~11GB kernel source + ~2-4GB build artifacts)
 - `repo`, `git`, `python3`, `bazel` installed
 - Android SDK Platform Tools (fastboot)
 - Unlocked bootloader on target device
@@ -58,20 +58,20 @@ cd pixel-kernel-hotspot-bypass
 See [docs/FLASH.md](docs/FLASH.md) for detailed instructions.
 
 ```bash
-# Quick flash (device connected via USB)
-cd out/dist
+# Quick flash (device connected via USB, from kernel-tegu directory)
+cd kernel-tegu
 
-# Bootloader mode
-fastboot flash boot boot.img
-fastboot flash dtbo dtbo.img
+# Bootloader mode - flash boot images
+fastboot flash boot bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
+fastboot flash dtbo bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img
+fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
 
 # Reboot to fastbootd for dynamic partitions
 fastboot reboot fastboot
 
 # Flash dynamic partitions
-fastboot flash vendor_kernel_boot vendor_kernel_boot.img
-fastboot flash vendor_dlkm vendor_dlkm.img
-fastboot flash system_dlkm system_dlkm.img
+fastboot flash vendor_dlkm bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img
+fastboot flash system_dlkm bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img
 
 # Reboot
 fastboot reboot
@@ -119,10 +119,9 @@ pixel-kernel-hotspot-bypass/
 │   └── build-kernel.sh
 ├── patches/
 │   └── kernelsu-version-fix.patch
-├── devices/
-│   └── tegu/
-│       └── device.sh
-└── releases/
+└── devices/
+    └── tegu/
+        └── device.sh
 ```
 
 ## Credits

@@ -20,3 +20,12 @@ bazel-*
 # Temporary files
 *.tmp
 *.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude (personal development)
+.claude/
+CLAUDE.md

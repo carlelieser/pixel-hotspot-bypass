@@ -39,10 +39,10 @@ Modern Pixel devices use **dynamic partitions**. This means some partitions must
 These can be flashed with standard `fastboot`:
 - `boot`
 - `dtbo`
+- `vendor_kernel_boot` ⚠️ **CRITICAL**: Must be flashed before rebooting to fastbootd!
 
 ### Fastbootd Mode Partitions
 These require `fastboot reboot fastboot` first:
-- `vendor_kernel_boot`
 - `vendor_dlkm`
 - `system_dlkm`
 
@@ -51,22 +51,22 @@ These require `fastboot reboot fastboot` first:
 ### Quick Reference
 
 ```bash
-cd out/tegu  # or your output directory
+cd kernel-tegu  # Navigate to kernel build directory
 
 # Connect device and reboot to bootloader
 adb reboot bootloader
 
-# Flash bootloader-mode partitions
-fastboot flash boot boot.img
-fastboot flash dtbo dtbo.img
+# Flash bootloader-mode partitions (CRITICAL: includes vendor_kernel_boot!)
+fastboot flash boot bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
+fastboot flash dtbo bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img
+fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
 
 # Reboot to fastbootd
 fastboot reboot fastboot
 
 # Flash dynamic partitions
-fastboot flash vendor_kernel_boot vendor_kernel_boot.img
-fastboot flash vendor_dlkm vendor_dlkm.img
-fastboot flash system_dlkm system_dlkm.img
+fastboot flash vendor_dlkm bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img
+fastboot flash system_dlkm bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img
 
 # Reboot device
 fastboot reboot
@@ -97,14 +97,17 @@ Wait for bootloader screen to appear.
 #### 3. Flash Boot Partitions
 
 ```bash
-# Navigate to output directory
-cd out/tegu
+# Navigate to kernel build directory
+cd kernel-tegu
 
-# Flash boot image (kernel + ramdisk)
-fastboot flash boot boot.img
+# Flash boot image (GKI kernel + ramdisk with KernelSU)
+fastboot flash boot bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
 
 # Flash device tree blob overlay
-fastboot flash dtbo dtbo.img
+fastboot flash dtbo bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img
+
+# Flash vendor kernel boot (CRITICAL - don't skip this!)
+fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
 ```
 
 Expected output:
@@ -125,14 +128,11 @@ The screen will change to show "fastbootd" mode. This is userspace fastboot runn
 #### 5. Flash Dynamic Partitions
 
 ```bash
-# Vendor kernel boot
-fastboot flash vendor_kernel_boot vendor_kernel_boot.img
-
 # Vendor kernel modules
-fastboot flash vendor_dlkm vendor_dlkm.img
+fastboot flash vendor_dlkm bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img
 
 # System kernel modules
-fastboot flash system_dlkm system_dlkm.img
+fastboot flash system_dlkm bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img
 ```
 
 #### 6. Reboot Device
@@ -161,7 +161,7 @@ Should show your custom kernel version.
 adb shell dmesg | grep -i kernelsu
 ```
 
-Should show KernelSU initialization messages with version 12882.
+Should show KernelSU initialization messages with version 10209+.
 
 ### Install KernelSU Manager
 
@@ -228,15 +228,22 @@ fastboot flashing unlock
 
 ### Device Stuck in Bootloop
 
-**Cause**: Kernel issue or partition mismatch.
+**Cause**: Kernel issue or partition mismatch. **Most common**: Missing vendor_kernel_boot.img flash!
 
 **Solution**:
 1. Boot to bootloader (hold Power + Volume Down)
-2. Flash factory boot image:
+2. Flash vendor_kernel_boot.img if you skipped it:
+   ```bash
+   fastboot flash vendor_kernel_boot bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
+   fastboot reboot
+   ```
+3. If still bootlooping, flash factory boot image:
    ```bash
    fastboot flash boot /path/to/factory/boot.img
    ```
-3. Or factory reset from bootloader
+4. Or factory reset from bootloader
+
+**Important**: Pixel 9a requires ALL THREE boot images (boot, dtbo, vendor_kernel_boot) to be flashed from bootloader mode before rebooting!
 
 ### "Cannot flash dynamic partition"
 

@@ -8,7 +8,7 @@ Complete guide for building the kernel with hotspot bypass modifications.
 
 - x86_64 Linux machine (or VM)
 - 16GB+ RAM (32GB recommended)
-- ~100GB free disk space
+- ~15-20GB free disk space (~11GB kernel source + ~2-4GB build artifacts)
 - Fast internet connection (for downloading kernel source)
 
 ### Software Requirements
@@ -43,7 +43,7 @@ For best results, use a native Linux machine. If using a VM:
 ### 1. Clone This Repository
 
 ```bash
-git clone https://github.com/yourusername/pixel-kernel-hotspot-bypass.git
+git clone https://github.com/carlelieser/pixel-kernel-hotspot-bypass.git
 cd pixel-kernel-hotspot-bypass
 ```
 
@@ -90,7 +90,12 @@ This will:
 
 Build time: 30-60 minutes depending on hardware.
 
-The output will be in `out/tegu/`.
+The output will be in `kernel-tegu/bazel-bin/` with images in specific subdirectories:
+- `bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img`
+- `bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img`
+- `bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img`
+- `bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img`
+- `bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img`
 
 ## Build Options
 
@@ -188,15 +193,20 @@ Reduce `-j` value if you have bandwidth issues.
 After building, verify the output:
 
 ```bash
-ls -lh out/tegu/*.img
+cd kernel-tegu
+ls -lh bazel-bin/aosp/kernel_aarch64_gki_artifacts/boot.img
+ls -lh bazel-bin/private/devices/google/tegu/kernel_images_boot_images/vendor_kernel_boot.img
+ls -lh bazel-bin/private/devices/google/tegu/kernel_images_dtbo/dtbo.img
+ls -lh bazel-bin/private/devices/google/tegu/kernel_images_vendor_dlkm_image/vendor_dlkm.img
+ls -lh bazel-bin/private/devices/google/tegu/kernel_images_system_dlkm_image/system_dlkm.img
 ```
 
-Expected files:
-- boot.img
-- dtbo.img
-- vendor_kernel_boot.img
-- vendor_dlkm.img
-- system_dlkm.img
+Expected files with approximate sizes:
+- boot.img (~64MB - GKI kernel with KernelSU)
+- vendor_kernel_boot.img (~8.4MB)
+- dtbo.img (~1.5MB)
+- vendor_dlkm.img (~45MB)
+- system_dlkm.img (~12MB)
 
 ## Next Steps
 
