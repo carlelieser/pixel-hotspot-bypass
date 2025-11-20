@@ -67,18 +67,15 @@ clone_kernelsu() {
     log_info "KernelSU-Next commit count: $commit_count"
     log_info "Calculated version: $calculated_version"
 
-    # Move kernel source files to parent directory
-    # KernelSU-Next repo structure has kernel source in kernel/ subdirectory
-    log_info "Moving kernel source files to driver directory..."
-    cp -r kernel/* .
-    rm -rf kernel .github .gitignore LICENSE website userspace CONTRIBUTING.md README.md docs manager 2>/dev/null || true
-    log_info "Kernel source files moved successfully"
+    # Keep the original repo structure - kernel source is in kernel/ subdirectory
+    # This matches how the working build was configured
+    log_info "KernelSU-Next cloned successfully (keeping kernel/ subdirectory structure)"
 }
 
 # Apply version fix for Bazel sandbox
 apply_version_fix() {
     local ksu_dir="${KERNEL_DIR}/aosp/drivers/kernelsu"
-    local makefile="${ksu_dir}/Makefile"
+    local makefile="${ksu_dir}/kernel/Makefile"
 
     if [[ ! -f "$makefile" ]]; then
         log_error "KernelSU Makefile not found: $makefile"
@@ -125,7 +122,7 @@ integrate_into_kernel() {
         log_info "KernelSU already integrated in drivers/Makefile"
     else
         log_info "Adding KernelSU to drivers/Makefile..."
-        echo 'obj-$(CONFIG_KSU) += kernelsu/' >> "$drivers_makefile"
+        echo 'obj-$(CONFIG_KSU) += kernelsu/kernel/' >> "$drivers_makefile"
     fi
 
     if grep -q "kernelsu" "$drivers_kconfig" 2>/dev/null; then
@@ -133,7 +130,7 @@ integrate_into_kernel() {
     else
         log_info "Adding KernelSU to drivers/Kconfig..."
         # Add before the last endmenu
-        sed -i '/^endmenu$/i source "drivers/kernelsu/Kconfig"' "$drivers_kconfig"
+        sed -i '/^endmenu$/i source "drivers/kernelsu/kernel/Kconfig"' "$drivers_kconfig"
     fi
 
     log_info "KernelSU integration complete"
