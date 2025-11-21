@@ -209,16 +209,16 @@ ui_checklist() {
 
         printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
         for ((i=0; i<${#items[@]}; i++)); do
-            local checkbox="☐"
+            local indicator="○"
             local color=""
             if [[ "${selected[$i]}" == "true" ]]; then
-                checkbox="☑"
+                indicator="●"
                 color="${COLOR_GREEN}"
             fi
             if [[ $i -eq $current ]]; then
-                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${indicator} ${items[$i]}${COLOR_RESET}" >/dev/tty
             else
-                printf '%s\n' "  ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "  ${color}${indicator} ${items[$i]}${COLOR_RESET}" >/dev/tty
             fi
         done
         printf '\n%s\n' "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
@@ -444,23 +444,23 @@ ui_checklist_with_conflicts() {
         printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
 
         for ((i=0; i<${#items[@]}; i++)); do
-            local checkbox="☐"
+            local indicator="○"
             local color=""
             local suffix=""
 
             if [[ "${disabled[$i]}" == "true" ]]; then
-                checkbox="☒"
+                indicator="×"
                 color="${COLOR_GRAY}"
                 suffix=" (${conflict_reason[$i]})"
             elif [[ "${selected[$i]}" == "true" ]]; then
-                checkbox="☑"
+                indicator="●"
                 color="${COLOR_GREEN}"
             fi
 
             if [[ $i -eq $current ]]; then
-                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${indicator} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
             else
-                printf '%s\n' "  ${color}${checkbox} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "  ${color}${indicator} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
             fi
         done
 
