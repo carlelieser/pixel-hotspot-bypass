@@ -412,11 +412,19 @@ run_interactive_setup() {
     ui_interactive_end
     ui_header "Configuration Summary"
     echo ""
+    local patches=()
+    [[ "$ENABLE_KERNELSU" = true ]] && patches+=("KernelSU")
+    [[ "$ENABLE_TTL_BYPASS" = true ]] && patches+=("TTL/HL Bypass")
+    local patches_str
+    if [[ ${#patches[@]} -eq 0 ]]; then
+        patches_str="None"
+    else
+        patches_str=$(IFS=", "; echo "${patches[*]}")
+    fi
     ui_table_kv \
         "Device" "$DEVICE_CODENAME" \
         "Branch" "$MANIFEST_BRANCH" \
-        "KernelSU" "$([ "$ENABLE_KERNELSU" = true ] && echo "Enabled" || echo "Disabled")" \
-        "TTL/HL Bypass" "$([ "$ENABLE_TTL_BYPASS" = true ] && echo "Enabled" || echo "Disabled")" \
+        "Patches" "$patches_str" \
         "LTO" "$LTO" \
         "Build Type" "$([ "$CLEAN_BUILD" = "1" ] && echo "Clean" || echo "Incremental")"
     echo ""
