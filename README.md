@@ -72,3 +72,10 @@ Helper script to build and flash custom kernels for your Pixel 9 series device. 
 ./phb.sh run --interactive   # creates .phb.conf
 ./phb.sh run                 # uses saved config
 ```
+
+## Resources
+
+- [Building Android Kernels](https://source.android.com/docs/setup/build/building-kernels) - Google's official guide
+- [KernelSU](https://github.com/tiann/KernelSU) - Original KernelSU project
+- [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next) - KernelSU fork used by PHB
+- [unlimited-hotspot](https://github.com/felikcat/unlimited-hotspot) - Hotspot bypass module
