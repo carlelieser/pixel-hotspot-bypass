@@ -1,8 +1,8 @@
-# Pixel Hotspot Bypass
+# 📱 Pixel Hotspot Bypass
 
 Helper script to build and flash custom kernels for your Pixel 9 series device. By default, PHB will build a KernelSUNext-integrated kernel with TTL/HL modules enabled. This, combined with the [unlimited hotspot module](https://github.com/felikcat/unlimited-hotspot) allows us to effectively bypass hotspot restrictions on our Pixels!
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 ./phb.sh run --interactive
@@ -36,7 +36,7 @@ Helper script to build and flash custom kernels for your Pixel 9 series device. 
 | `post-install` | Install KSU manager APK and unlimited-hotspot module |
 | `run` | Execute full workflow (setup → configure → build → flash) |
 
-## ⚙️ Build Options
+## Build Options
 
 ```bash
 ./phb.sh build -d tegu --lto none    # fastest build (~10min), larger kernel
