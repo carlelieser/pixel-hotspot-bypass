@@ -8,8 +8,6 @@ Build custom Pixel kernel with KernelSU-Next and TTL/HL patch support for Pixel 
 ./phb.sh run --interactive
 ```
 
-This will guide you through device selection, patch selection, and build options.
-
 ## Usage
 
 ```bash
@@ -62,15 +60,11 @@ This will guide you through device selection, patch selection, and build options
 
 ## Post-Install
 
-After flashing, install the KernelSU manager app and hotspot module:
-
 ```bash
 ./phb.sh post-install                  # KSU-Next manager + unlimited-hotspot module
 ./phb.sh post-install --manager ksu    # use original KernelSU manager instead
 ./phb.sh post-install --skip-manager   # module only (if manager already installed)
 ```
-
-The module is installed via `ksud` or extracted to `/data/adb/modules/`. Reboot to activate.
 
 ## Supported Devices
 
@@ -83,8 +77,6 @@ The module is installed via `ksud` or extracted to `/data/adb/modules/`. Reboot 
 | `comet` | Pixel 9 Pro Fold |
 
 ## Configuration
-
-Settings are saved to `.phb.conf` after first run:
 
 ```bash
 ./phb.sh run --interactive   # creates .phb.conf
