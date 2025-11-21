@@ -322,8 +322,8 @@ apply_patch_file() {
     show_status checking "Apply $patch_name"
 
     if [[ ! -f "$patch_file" ]]; then
-        show_status error "Apply $patch_name" "patch not found"
-        return 1
+        show_status skip "Apply $patch_name" "patch not found"
+        return 0
     fi
 
     cd "$target_dir"
@@ -332,8 +332,8 @@ apply_patch_file() {
             show_status ok "Apply $patch_name" "applied"
             return 0
         else
-            show_status error "Apply $patch_name" "apply failed"
-            return 1
+            show_status skip "Apply $patch_name" "apply failed"
+            return 0
         fi
     else
         # Check if already applied by checking reverse
@@ -341,8 +341,14 @@ apply_patch_file() {
             show_status skip "Apply $patch_name" "already applied"
             return 0
         else
-            show_status error "Apply $patch_name" "conflicts"
-            return 1
+            # Try with 3-way merge for better conflict handling
+            if git apply --3way "$patch_file" &>/dev/null; then
+                show_status ok "Apply $patch_name" "applied (3way)"
+                return 0
+            else
+                show_status skip "Apply $patch_name" "skipped (conflicts)"
+                return 0
+            fi
         fi
     fi
 }
@@ -385,6 +391,7 @@ apply_wild_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Wild Patches${COLOR_RESET}"
+    echo "  ${COLOR_GRAY}Note: Hook patches may conflict with KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
     # Apply hooks
     [[ -f "${patches_dir}/hooks/ksu_hooks.patch" ]] && \
@@ -404,6 +411,7 @@ apply_sultan_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Sultan Patches${COLOR_RESET}"
+    echo "  ${COLOR_GRAY}Note: Hook patches may conflict with KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
     [[ -f "${patches_dir}/ksu_hooks.patch" ]] && \
         apply_patch_file "${patches_dir}/ksu_hooks.patch" "sultan/ksu_hooks"
