@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 
-source "$ROOT_DIR/scripts/common.sh"
+source "$ROOT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/ui.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"

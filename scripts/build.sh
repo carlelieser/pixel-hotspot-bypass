@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-source "$SCRIPT_DIR/common.sh"
+source "$ROOT_DIR/lib/common.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"
 SOC="${SOC:-zumapro}"

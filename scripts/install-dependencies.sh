@@ -2,8 +2,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
-source "$(dirname "$SCRIPT_DIR")/lib/ui.sh"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$ROOT_DIR/lib/common.sh"
+source "$ROOT_DIR/lib/ui.sh"
 
 REPO_BIN_DIR="$HOME/.bin"
 INSTALL_MISSING=false
