@@ -6,6 +6,7 @@ ROOT_DIR="$SCRIPT_DIR"
 
 source "$ROOT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/ui.sh"
+source "$SCRIPT_DIR/lib/patches.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"
 MANIFEST_BRANCH="${MANIFEST_BRANCH:-}"
@@ -37,6 +38,7 @@ ENABLE_KERNELSU=true
 ENABLE_TTL_BYPASS=true
 ENABLE_WILD=false
 ENABLE_SULTAN=false
+SELECTED_PATCHES=""
 
 CONFIG_FILE="$ROOT_DIR/.phb.conf"
 
@@ -262,6 +264,7 @@ ENABLE_KERNELSU="$ENABLE_KERNELSU"
 ENABLE_TTL_BYPASS="$ENABLE_TTL_BYPASS"
 ENABLE_WILD="$ENABLE_WILD"
 ENABLE_SULTAN="$ENABLE_SULTAN"
+SELECTED_PATCHES="$SELECTED_PATCHES"
 SOC="$SOC"
 EOF
     ui_dim "Configuration saved to .phb.conf"
@@ -412,37 +415,85 @@ interactive_device_selection() {
 }
 
 interactive_patch_selection() {
-    # Flavor selection - mutually exclusive options
-    local flavor=$(ui_select "Select Kernel Flavor" \
-        "KernelSU-Next + Sultan (Root + Sultan hooks)" \
-        "KernelSU-Next (Root only)" \
-        "Wild (WildKernels manual hooks)")
+    # Build list of selectable items
+    local -a items=()
+    local -a item_types=()  # Track what each item is: "integration", "config", "patch"
+    local -a item_values=() # Track the actual value (patch filename, etc.)
 
+    # 1. KernelSU-Next integration (special, not a patch file)
+    items+=("KernelSU-Next (Root solution)")
+    item_types+=("integration")
+    item_values+=("kernelsu")
+
+    # 2. TTL/HL Bypass (config-based, not a patch file)
+    items+=("TTL/HL Bypass (Hotspot tethering)")
+    item_types+=("config")
+    item_values+=("ttl-hl")
+
+    # 3. Discover all .patch files
+    local patches_dir="$ROOT_DIR/patches"
+    if [[ -d "$patches_dir" ]]; then
+        while IFS= read -r patch_file; do
+            [[ -z "$patch_file" ]] && continue
+            local patch_name=$(get_patch_name "$patch_file")
+            items+=("$patch_name")
+            item_types+=("patch")
+            item_values+=("$patch_name")
+        done < <(discover_patches)
+    fi
+
+    # Show checklist for multi-selection
+    local selected_str
+    selected_str=$(ui_checklist "Select Features & Patches" "${items[@]}")
+
+    # Parse selections
     ENABLE_KERNELSU=false
+    ENABLE_TTL_BYPASS=false
     ENABLE_WILD=false
     ENABLE_SULTAN=false
+    SELECTED_PATCHES=""
 
-    case "$flavor" in
-        "KernelSU-Next + Sultan"*)
-            ENABLE_KERNELSU=true
-            ENABLE_SULTAN=true
-            ;;
-        "KernelSU-Next"*)
-            ENABLE_KERNELSU=true
-            ;;
-        "Wild"*)
-            ENABLE_WILD=true
-            ;;
-    esac
+    local -a selected_patches=()
 
-    # TTL/HL Bypass is independent - always ask
-    local ttl_selection=$(ui_select "TTL/HL Bypass (Hotspot tethering)" \
-        "Yes (Enable bypass)" \
-        "No (Skip)")
-    ENABLE_TTL_BYPASS=false
-    if [[ "$ttl_selection" == "Yes"* ]]; then
-        ENABLE_TTL_BYPASS=true
-    fi
+    # Convert selected string back to array
+    IFS=' ' read -ra selected_items <<< "$selected_str"
+
+    for selected in "${selected_items[@]}"; do
+        # Find this item in our lists
+        for ((i=0; i<${#items[@]}; i++)); do
+            # Match by checking if selected contains the item (handles multi-word items)
+            if [[ "${items[$i]}" == *"$selected"* ]] || [[ "$selected" == *"${item_values[$i]}"* ]]; then
+                case "${item_types[$i]}" in
+                    integration)
+                        if [[ "${item_values[$i]}" == "kernelsu" ]]; then
+                            ENABLE_KERNELSU=true
+                        fi
+                        ;;
+                    config)
+                        if [[ "${item_values[$i]}" == "ttl-hl" ]]; then
+                            ENABLE_TTL_BYPASS=true
+                        fi
+                        ;;
+                    patch)
+                        selected_patches+=("${item_values[$i]}")
+                        ;;
+                esac
+                break
+            fi
+        done
+    done
+
+    # Join selected patches with comma
+    SELECTED_PATCHES=$(IFS=','; echo "${selected_patches[*]}")
+
+    # Show summary
+    echo ""
+    ui_info "Selected:"
+    [[ "$ENABLE_KERNELSU" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} KernelSU-Next"
+    [[ "$ENABLE_TTL_BYPASS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} TTL/HL Bypass"
+    for p in "${selected_patches[@]}"; do
+        echo "  ${COLOR_GREEN}✓${COLOR_RESET} $p"
+    done
 }
 
 interactive_build_options() {
@@ -470,22 +521,22 @@ run_interactive_setup() {
     ui_interactive_end
     ui_header "Configuration Summary"
     echo ""
-    # Determine flavor string
-    local flavor_str
-    if [[ "$ENABLE_KERNELSU" = true && "$ENABLE_SULTAN" = true ]]; then
-        flavor_str="KernelSU-Next + Sultan"
-    elif [[ "$ENABLE_KERNELSU" = true ]]; then
-        flavor_str="KernelSU-Next"
-    elif [[ "$ENABLE_WILD" = true ]]; then
-        flavor_str="Wild"
-    else
-        flavor_str="None"
+    # Determine features string
+    local features_str=""
+    [[ "$ENABLE_KERNELSU" = true ]] && features_str="KernelSU-Next"
+    [[ "$ENABLE_TTL_BYPASS" = true ]] && features_str="${features_str:+$features_str + }TTL/HL Bypass"
+    [[ -z "$features_str" ]] && features_str="None"
+
+    # Count selected patches
+    local patch_count=0
+    if [[ -n "$SELECTED_PATCHES" ]]; then
+        patch_count=$(echo "$SELECTED_PATCHES" | tr ',' '\n' | wc -l)
+        features_str="${features_str} + ${patch_count} patch(es)"
     fi
-    [[ "$ENABLE_TTL_BYPASS" = true ]] && flavor_str="$flavor_str + TTL/HL Bypass"
     ui_table_kv \
         "Device" "$DEVICE_CODENAME" \
         "Branch" "$MANIFEST_BRANCH" \
-        "Flavor" "$flavor_str" \
+        "Features" "$features_str" \
         "LTO" "$LTO" \
         "Build Type" "$([ "$CLEAN_BUILD" = "1" ] && echo "Clean" || echo "Incremental")"
     echo ""
@@ -550,7 +601,7 @@ cmd_configure() {
         done
     fi
     export DEVICE_CODENAME KERNELSU_REPO KERNELSU_BRANCH KSU_VERSION KSU_VERSION_TAG
-    export ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN
+    export ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN SELECTED_PATCHES
     set_derived_vars
     source "$ROOT_DIR/scripts/configure.sh"
     run_configure
@@ -642,7 +693,8 @@ cmd_run() {
     [[ ! "$LTO" =~ ^(none|thin|full)$ ]] && ui_error "Invalid LTO: $LTO" && exit 1
     export DEVICE_CODENAME MANIFEST_BRANCH MANIFEST_URL KERNELSU_REPO KERNELSU_BRANCH \
            KSU_VERSION KSU_VERSION_TAG SOC BAZEL_CONFIG BUILD_TARGET LTO CLEAN_BUILD \
-           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN
+           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN \
+           SELECTED_PATCHES
     set_derived_vars
     export KERNEL_DIR OUTPUT_DIR DEFCONFIG_PATH ROOT_DIR
     export PHB_WORKFLOW=true

@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$ROOT_DIR/lib/common.sh"
 source "$ROOT_DIR/lib/ui.sh"
+source "$ROOT_DIR/lib/patches.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"
 KERNELSU_REPO="${KERNELSU_REPO:-https://github.com/rifsxd/KernelSU-Next}"
@@ -15,6 +16,8 @@ AUTO_EXPUNGE="${AUTO_EXPUNGE:-0}"
 ENABLE_KERNELSU="${ENABLE_KERNELSU:-true}"
 ENABLE_WILD="${ENABLE_WILD:-false}"
 ENABLE_SULTAN="${ENABLE_SULTAN:-false}"
+ENABLE_TTL_BYPASS="${ENABLE_TTL_BYPASS:-true}"
+SELECTED_PATCHES="${SELECTED_PATCHES:-}"  # Comma-separated list of patch files
 WILDKERNELS_REPO="https://raw.githubusercontent.com/WildKernels/kernel_patches/main"
 
 show_usage() {
@@ -422,6 +425,74 @@ apply_sultan_patches() {
         apply_patch_file "${patches_dir}/sys.c_fix.patch" "sultan/sys.c_fix"
 }
 
+# Apply user-selected patches with conflict detection
+apply_selected_patches() {
+    local patches_dir="${ROOT_DIR}/patches"
+    local target_dir="${KERNEL_DIR}/aosp"
+
+    [[ -z "$SELECTED_PATCHES" ]] && return 0
+
+    echo ""
+    echo "${COLOR_BOLD}Apply Selected Patches${COLOR_RESET}"
+
+    # Convert comma-separated to array
+    IFS=',' read -ra patch_list <<< "$SELECTED_PATCHES"
+
+    # Build full paths
+    local full_paths=()
+    for patch in "${patch_list[@]}"; do
+        local full_path="${patches_dir}/${patch}"
+        if [[ -f "$full_path" ]]; then
+            full_paths+=("$full_path")
+        else
+            show_status error "Patch not found" "$patch"
+        fi
+    done
+
+    [[ ${#full_paths[@]} -eq 0 ]] && return 0
+
+    # Validate selection for conflicts
+    show_status checking "Validating patch selection"
+    local conflicts
+    conflicts=$(validate_patch_selection "$target_dir" "${full_paths[@]}" 2>&1)
+    if [[ $? -ne 0 ]]; then
+        show_status error "Patch conflicts detected" ""
+        echo "$conflicts" | while read -r line; do
+            echo "    ${COLOR_RED}$line${COLOR_RESET}"
+        done
+        return 1
+    fi
+    show_status ok "Patch validation" "no conflicts"
+
+    # Check if any patch requires manual hooks (disables kprobes)
+    local needs_manual_hooks=false
+    for patch in "${full_paths[@]}"; do
+        if patch_requires_manual_hooks "$patch"; then
+            needs_manual_hooks=true
+            break
+        fi
+    done
+
+    if [[ "$needs_manual_hooks" == true ]]; then
+        show_status checking "Manual hooks required"
+        # Add CONFIG_KSU_KPROBES_HOOK=n to defconfig
+        local defconfig_path="${KERNEL_DIR}/${DEFCONFIG_PATH}"
+        if ! grep -q "^CONFIG_KSU_KPROBES_HOOK=" "$defconfig_path" 2>/dev/null; then
+            echo "CONFIG_KSU_KPROBES_HOOK=n" >> "$defconfig_path"
+            show_status ok "CONFIG_KSU_KPROBES_HOOK" "=n (added)"
+        else
+            sed -i 's/^CONFIG_KSU_KPROBES_HOOK=.*/CONFIG_KSU_KPROBES_HOOK=n/' "$defconfig_path"
+            show_status ok "CONFIG_KSU_KPROBES_HOOK" "=n (updated)"
+        fi
+    fi
+
+    # Apply each patch
+    for patch in "${full_paths[@]}"; do
+        local name=$(get_patch_name "$patch")
+        apply_patch_file "$patch" "$name"
+    done
+}
+
 invalidate_cache() {
     echo ""
     echo "${COLOR_BOLD}Build Cache${COLOR_RESET}"
@@ -477,20 +548,26 @@ run_configure() {
         exit 1
     fi
 
-    # Apply flavor-specific patches
-    if [[ "$ENABLE_WILD" == "true" ]]; then
-        # Wild flavor: manual hooks, no KernelSU-Next
-        download_wild_patches
-        apply_wild_patches
-    elif [[ "$ENABLE_KERNELSU" == "true" ]]; then
-        # KernelSU-Next flavors
-        if [[ "$ENABLE_SULTAN" == "true" ]]; then
-            # Apply Sultan patches before KernelSU-Next
+    # Apply user-selected patches first (if any)
+    if [[ -n "$SELECTED_PATCHES" ]]; then
+        apply_selected_patches || exit 1
+    fi
+
+    # Apply legacy flavor-specific patches (for backward compatibility)
+    if [[ -z "$SELECTED_PATCHES" ]]; then
+        if [[ "$ENABLE_WILD" == "true" ]]; then
+            # Wild flavor: manual hooks, no KernelSU-Next
+            download_wild_patches
+            apply_wild_patches
+        elif [[ "$ENABLE_SULTAN" == "true" ]]; then
+            # Sultan patches before KernelSU-Next
             download_sultan_patches
             apply_sultan_patches
         fi
+    fi
 
-        # Clone and integrate KernelSU-Next
+    # KernelSU-Next integration (if enabled)
+    if [[ "$ENABLE_KERNELSU" == "true" ]]; then
         echo ""
         echo "${COLOR_BOLD}KernelSU Integration${COLOR_RESET}"
         clone_kernelsu
