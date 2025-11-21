@@ -555,14 +555,15 @@ run_interactive_setup() {
     local features_str=""
     [[ "$ENABLE_KERNELSU" = true ]] && features_str="KernelSU-Next"
     [[ "$ENABLE_TTL_BYPASS" = true ]] && features_str="${features_str:+$features_str + }TTL/HL"
-    [[ -z "$features_str" ]] && features_str="None"
+    [[ "$ENABLE_SUSFS" = true ]] && features_str="${features_str:+$features_str + }SUSFS"
 
     # Count selected patches
     local patch_count=0
     if [[ -n "$SELECTED_PATCHES" ]]; then
-        patch_count=$(echo "$SELECTED_PATCHES" | tr ',' '\n' | wc -l)
-        features_str="${features_str} + ${patch_count} patch(es)"
+        patch_count=$(echo "$SELECTED_PATCHES" | tr ',' '\n' | wc -l | tr -d ' ')
+        features_str="${features_str:+$features_str + }${patch_count} patch(es)"
     fi
+    [[ -z "$features_str" ]] && features_str="None"
     ui_table_kv \
         "Device" "$DEVICE_CODENAME" \
         "Branch" "$MANIFEST_BRANCH" \
