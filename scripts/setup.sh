@@ -168,7 +168,12 @@ setup_kernel_source() {
     rm -f "$init_log"
 
     # Repo sync with progress
-    local num_jobs=$(nproc)
+    local num_jobs
+    if command -v nproc &>/dev/null; then
+        num_jobs=$(nproc)
+    else
+        num_jobs=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+    fi
     printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Syncing source (this takes a while)..."
 
     local sync_log=$(mktemp)
