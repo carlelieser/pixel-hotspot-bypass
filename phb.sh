@@ -35,6 +35,8 @@ ONLY_FLASH=false
 
 ENABLE_KERNELSU=true
 ENABLE_TTL_BYPASS=true
+ENABLE_WILD=false
+ENABLE_SULTAN=false
 
 CONFIG_FILE="$ROOT_DIR/.phb.conf"
 
@@ -119,7 +121,9 @@ ${COLOR_BOLD}OPTIONS:${COLOR_RESET}
 
 ${COLOR_BOLD}AVAILABLE PATCHES:${COLOR_RESET}
   ${COLOR_GREEN}kernelsu${COLOR_RESET}     - KernelSU-Next root solution
-  ${COLOR_GREEN}ttl-hl${COLOR_RESET}   - TTL/HL hotspot bypass modifications
+  ${COLOR_GREEN}ttl-hl${COLOR_RESET}       - TTL/HL hotspot bypass modifications
+  ${COLOR_GREEN}wild${COLOR_RESET}         - WildKernels patches (hooks, bypass, susfs fixes)
+  ${COLOR_GREEN}sultan${COLOR_RESET}       - Sultan patches (KSU/syscall hooks)
 
 ${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
   phb configure -d tegu                              # Interactive selection
@@ -256,6 +260,8 @@ CLEAN_BUILD="$CLEAN_BUILD"
 AUTO_EXPUNGE="$AUTO_EXPUNGE"
 ENABLE_KERNELSU="$ENABLE_KERNELSU"
 ENABLE_TTL_BYPASS="$ENABLE_TTL_BYPASS"
+ENABLE_WILD="$ENABLE_WILD"
+ENABLE_SULTAN="$ENABLE_SULTAN"
 SOC="$SOC"
 EOF
     ui_dim "Configuration saved to .phb.conf"
@@ -408,14 +414,24 @@ interactive_device_selection() {
 interactive_patch_selection() {
     local selected=$(ui_checklist "Select Patches" \
         "KernelSU-Next (Root solution)" \
-        "TTL/HL Bypass (Hotspot tethering)")
+        "TTL/HL Bypass (Hotspot tethering)" \
+        "Wild (WildKernels hooks/bypass/susfs)" \
+        "Sultan (KSU/syscall hooks)")
     ENABLE_KERNELSU=false
     ENABLE_TTL_BYPASS=false
+    ENABLE_WILD=false
+    ENABLE_SULTAN=false
     if echo "$selected" | grep -q "KernelSU"; then
         ENABLE_KERNELSU=true
     fi
     if echo "$selected" | grep -q "TTL/HL"; then
         ENABLE_TTL_BYPASS=true
+    fi
+    if echo "$selected" | grep -q "Wild"; then
+        ENABLE_WILD=true
+    fi
+    if echo "$selected" | grep -q "Sultan"; then
+        ENABLE_SULTAN=true
     fi
 }
 
@@ -447,6 +463,8 @@ run_interactive_setup() {
     local patches=()
     [[ "$ENABLE_KERNELSU" = true ]] && patches+=("KernelSU")
     [[ "$ENABLE_TTL_BYPASS" = true ]] && patches+=("TTL/HL Bypass")
+    [[ "$ENABLE_WILD" = true ]] && patches+=("Wild")
+    [[ "$ENABLE_SULTAN" = true ]] && patches+=("Sultan")
     local patches_str
     if [[ ${#patches[@]} -eq 0 ]]; then
         patches_str="None"
@@ -507,17 +525,21 @@ cmd_configure() {
     else
         ENABLE_KERNELSU=false
         ENABLE_TTL_BYPASS=false
+        ENABLE_WILD=false
+        ENABLE_SULTAN=false
         IFS=',' read -ra PATCH_ARRAY <<< "$patches"
         for patch in "${PATCH_ARRAY[@]}"; do
             case "$patch" in
                 kernelsu) ENABLE_KERNELSU=true ;;
                 ttl-hl) ENABLE_TTL_BYPASS=true ;;
+                wild) ENABLE_WILD=true ;;
+                sultan) ENABLE_SULTAN=true ;;
                 *) ui_warning "Unknown patch: $patch" ;;
             esac
         done
     fi
     export DEVICE_CODENAME KERNELSU_REPO KERNELSU_BRANCH KSU_VERSION KSU_VERSION_TAG
-    export ENABLE_KERNELSU ENABLE_TTL_BYPASS
+    export ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN
     set_derived_vars
     source "$ROOT_DIR/scripts/configure.sh"
     run_configure
@@ -609,7 +631,7 @@ cmd_run() {
     [[ ! "$LTO" =~ ^(none|thin|full)$ ]] && ui_error "Invalid LTO: $LTO" && exit 1
     export DEVICE_CODENAME MANIFEST_BRANCH MANIFEST_URL KERNELSU_REPO KERNELSU_BRANCH \
            KSU_VERSION KSU_VERSION_TAG SOC BAZEL_CONFIG BUILD_TARGET LTO CLEAN_BUILD \
-           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS
+           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN
     set_derived_vars
     export KERNEL_DIR OUTPUT_DIR DEFCONFIG_PATH ROOT_DIR
     export PHB_WORKFLOW=true

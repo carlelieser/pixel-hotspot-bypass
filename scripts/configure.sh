@@ -12,6 +12,9 @@ KERNELSU_BRANCH="${KERNELSU_BRANCH:-next}"
 KSU_VERSION="${KSU_VERSION:-12882}"
 KSU_VERSION_TAG="${KSU_VERSION_TAG:-v1.1.1}"
 AUTO_EXPUNGE="${AUTO_EXPUNGE:-0}"
+ENABLE_WILD="${ENABLE_WILD:-false}"
+ENABLE_SULTAN="${ENABLE_SULTAN:-false}"
+WILDKERNELS_REPO="https://raw.githubusercontent.com/WildKernels/kernel_patches/main"
 
 show_usage() {
     cat << EOF
@@ -289,6 +292,127 @@ verify_configs() {
     fi
 }
 
+download_patch() {
+    local url="$1"
+    local dest="$2"
+    local name="$3"
+
+    show_status checking "Download $name"
+
+    if [[ -f "$dest" ]]; then
+        show_status skip "Download $name" "already exists"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+    if curl -sL "$url" -o "$dest" 2>/dev/null; then
+        show_status ok "Download $name" "downloaded"
+        return 0
+    else
+        show_status error "Download $name" "failed"
+        return 1
+    fi
+}
+
+apply_patch_file() {
+    local patch_file="$1"
+    local patch_name="$2"
+    local target_dir="${3:-${KERNEL_DIR}/aosp}"
+
+    show_status checking "Apply $patch_name"
+
+    if [[ ! -f "$patch_file" ]]; then
+        show_status error "Apply $patch_name" "patch not found"
+        return 1
+    fi
+
+    cd "$target_dir"
+    if git apply --check "$patch_file" &>/dev/null; then
+        if git apply "$patch_file" &>/dev/null; then
+            show_status ok "Apply $patch_name" "applied"
+            return 0
+        else
+            show_status error "Apply $patch_name" "apply failed"
+            return 1
+        fi
+    else
+        # Check if already applied by checking reverse
+        if git apply --check -R "$patch_file" &>/dev/null; then
+            show_status skip "Apply $patch_name" "already applied"
+            return 0
+        else
+            show_status error "Apply $patch_name" "conflicts"
+            return 1
+        fi
+    fi
+}
+
+download_wild_patches() {
+    local patches_dir="${ROOT_DIR}/patches/wild"
+
+    echo ""
+    echo "${COLOR_BOLD}Download Wild Patches${COLOR_RESET}"
+
+    # Hooks
+    download_patch "${WILDKERNELS_REPO}/wild/hooks/ksu_hooks.patch" \
+        "${patches_dir}/hooks/ksu_hooks.patch" "wild/hooks/ksu_hooks"
+    download_patch "${WILDKERNELS_REPO}/wild/hooks/syscall_hooks.patch" \
+        "${patches_dir}/hooks/syscall_hooks.patch" "wild/hooks/syscall_hooks"
+    download_patch "${WILDKERNELS_REPO}/wild/hooks/scope_min_manual_hooks_v1.4.patch" \
+        "${patches_dir}/hooks/scope_min_manual_hooks.patch" "wild/hooks/scope_min_manual"
+
+    # Bypass patches
+    download_patch "${WILDKERNELS_REPO}/wild/bypass_patches/abi_bypass_gki.patch" \
+        "${patches_dir}/bypass/abi_bypass_gki.patch" "wild/bypass/abi_bypass_gki"
+}
+
+download_sultan_patches() {
+    local patches_dir="${ROOT_DIR}/patches/sultan"
+
+    echo ""
+    echo "${COLOR_BOLD}Download Sultan Patches${COLOR_RESET}"
+
+    download_patch "${WILDKERNELS_REPO}/sultan/ksu_hooks.patch" \
+        "${patches_dir}/ksu_hooks.patch" "sultan/ksu_hooks"
+    download_patch "${WILDKERNELS_REPO}/sultan/syscall_hooks.patch" \
+        "${patches_dir}/syscall_hooks.patch" "sultan/syscall_hooks"
+    download_patch "${WILDKERNELS_REPO}/sultan/sys.c_fix.patch" \
+        "${patches_dir}/sys.c_fix.patch" "sultan/sys.c_fix"
+}
+
+apply_wild_patches() {
+    local patches_dir="${ROOT_DIR}/patches/wild"
+
+    echo ""
+    echo "${COLOR_BOLD}Apply Wild Patches${COLOR_RESET}"
+
+    # Apply hooks
+    [[ -f "${patches_dir}/hooks/ksu_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/ksu_hooks.patch" "wild/ksu_hooks"
+    [[ -f "${patches_dir}/hooks/syscall_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/syscall_hooks.patch" "wild/syscall_hooks"
+    [[ -f "${patches_dir}/hooks/scope_min_manual_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/scope_min_manual_hooks.patch" "wild/scope_min_manual"
+
+    # Apply bypass patches
+    [[ -f "${patches_dir}/bypass/abi_bypass_gki.patch" ]] && \
+        apply_patch_file "${patches_dir}/bypass/abi_bypass_gki.patch" "wild/abi_bypass_gki"
+}
+
+apply_sultan_patches() {
+    local patches_dir="${ROOT_DIR}/patches/sultan"
+
+    echo ""
+    echo "${COLOR_BOLD}Apply Sultan Patches${COLOR_RESET}"
+
+    [[ -f "${patches_dir}/ksu_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/ksu_hooks.patch" "sultan/ksu_hooks"
+    [[ -f "${patches_dir}/syscall_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/syscall_hooks.patch" "sultan/syscall_hooks"
+    [[ -f "${patches_dir}/sys.c_fix.patch" ]] && \
+        apply_patch_file "${patches_dir}/sys.c_fix.patch" "sultan/sys.c_fix"
+}
+
 invalidate_cache() {
     echo ""
     echo "${COLOR_BOLD}Build Cache${COLOR_RESET}"
@@ -344,6 +468,18 @@ run_configure() {
 
     apply_defconfig_changes
     apply_gki_defconfig_changes
+
+    # WildKernels patches
+    if [[ "$ENABLE_WILD" == "true" ]]; then
+        download_wild_patches
+        apply_wild_patches
+    fi
+
+    if [[ "$ENABLE_SULTAN" == "true" ]]; then
+        download_sultan_patches
+        apply_sultan_patches
+    fi
+
     verify_configs
     invalidate_cache
     print_summary
