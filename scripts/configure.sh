@@ -391,17 +391,12 @@ apply_wild_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Wild Patches${COLOR_RESET}"
-    echo "  ${COLOR_GRAY}Note: Hook patches may conflict with KernelSU-Next (uses kprobes)${COLOR_RESET}"
+    echo "  ${COLOR_GRAY}Note: Hook patches skipped for KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
-    # Apply hooks
-    [[ -f "${patches_dir}/hooks/ksu_hooks.patch" ]] && \
-        apply_patch_file "${patches_dir}/hooks/ksu_hooks.patch" "wild/ksu_hooks"
-    [[ -f "${patches_dir}/hooks/syscall_hooks.patch" ]] && \
-        apply_patch_file "${patches_dir}/hooks/syscall_hooks.patch" "wild/syscall_hooks"
-    [[ -f "${patches_dir}/hooks/scope_min_manual_hooks.patch" ]] && \
-        apply_patch_file "${patches_dir}/hooks/scope_min_manual_hooks.patch" "wild/scope_min_manual"
+    # Skip hook patches - they're for manual hook KSU, not KernelSU-Next which uses kprobes
+    # The hooks and syscall_hooks patches are interdependent and incompatible with kprobe-based KSU
 
-    # Apply bypass patches
+    # Apply bypass patches only
     [[ -f "${patches_dir}/bypass/abi_bypass_gki.patch" ]] && \
         apply_patch_file "${patches_dir}/bypass/abi_bypass_gki.patch" "wild/abi_bypass_gki"
 }
@@ -411,12 +406,10 @@ apply_sultan_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Sultan Patches${COLOR_RESET}"
-    echo "  ${COLOR_GRAY}Note: Hook patches may conflict with KernelSU-Next (uses kprobes)${COLOR_RESET}"
+    echo "  ${COLOR_GRAY}Note: Hook patches skipped for KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
-    [[ -f "${patches_dir}/ksu_hooks.patch" ]] && \
-        apply_patch_file "${patches_dir}/ksu_hooks.patch" "sultan/ksu_hooks"
-    [[ -f "${patches_dir}/syscall_hooks.patch" ]] && \
-        apply_patch_file "${patches_dir}/syscall_hooks.patch" "sultan/syscall_hooks"
+    # Skip hook patches - they're for manual hook KSU, not KernelSU-Next which uses kprobes
+    # Only sys.c_fix may be applicable
     [[ -f "${patches_dir}/sys.c_fix.patch" ]] && \
         apply_patch_file "${patches_dir}/sys.c_fix.patch" "sultan/sys.c_fix"
 }
