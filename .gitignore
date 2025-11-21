@@ -1,6 +1,7 @@
 # Build outputs
 out/
 kernel-*/
+downloads/
 *.img
 
 # Bazel

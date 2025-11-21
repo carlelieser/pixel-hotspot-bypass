@@ -53,8 +53,8 @@ ${COLOR_BOLD}COMMANDS:${COLOR_RESET}
   ${COLOR_CYAN}configure${COLOR_RESET}           Apply selected patches to kernel
   ${COLOR_CYAN}build${COLOR_RESET}               Compile kernel
   ${COLOR_CYAN}flash${COLOR_RESET}               Flash kernel to device
+  ${COLOR_CYAN}post-install${COLOR_RESET}        Install KSU manager and unlimited-hotspot module
   ${COLOR_CYAN}run${COLOR_RESET}                 Execute full workflow (setup → configure → build → flash)
-  ${COLOR_CYAN}completion${COLOR_RESET}          Generate shell completion script (bash|zsh)
 
 ${COLOR_BOLD}GLOBAL OPTIONS:${COLOR_RESET}
   -h, --help          Show this help message
@@ -195,6 +195,27 @@ ${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
 EOF
 }
 
+show_post_install_help() {
+    cat << EOF
+${COLOR_BOLD}phb post-install${COLOR_RESET} - Install KSU manager and unlimited-hotspot module
+
+${COLOR_BOLD}USAGE:${COLOR_RESET}
+  phb post-install [options]
+
+${COLOR_BOLD}OPTIONS:${COLOR_RESET}
+  --manager TYPE       Manager type: ksunext (default), ksu
+  --skip-manager       Skip KSU manager APK installation
+  --skip-module        Skip unlimited-hotspot module installation
+  -h, --help           Show this help
+
+${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
+  phb post-install                    # Install both manager and module
+  phb post-install --manager ksu      # Use original KernelSU manager
+  phb post-install --skip-manager     # Only install unlimited-hotspot module
+
+EOF
+}
+
 show_run_help() {
     cat << EOF
 ${COLOR_BOLD}phb run${COLOR_RESET} - Execute full kernel build workflow
@@ -255,6 +276,17 @@ cmd_deps() {
         esac
     done
     "$ROOT_DIR/scripts/install-dependencies.sh" "$@"
+}
+
+cmd_post-install() {
+    for arg in "$@"; do
+        case "$arg" in
+            -h|--help) show_post_install_help; exit 0 ;;
+        esac
+    done
+    source "$ROOT_DIR/scripts/post-install.sh"
+    parse_arguments "$@"
+    run_post_install
 }
 
 cmd_detect() {
@@ -634,18 +666,6 @@ cmd_run() {
     save_config
 }
 
-cmd_completion() {
-    local shell="${1:-}"
-    if [[ -z "$shell" ]]; then
-        ui_error "Specify shell: bash or zsh"
-        echo ""
-        echo "Usage: phb completion bash > /etc/bash_completion.d/phb"
-        echo "       phb completion zsh > ~/.zsh/completions/_phb"
-        exit 1
-    fi
-    source "$SCRIPT_DIR/lib/completions.sh"
-    generate_completion "$shell"
-}
 
 handle_legacy_flags() {
     local has_only_flag=false
@@ -707,7 +727,7 @@ main() {
     fi
     local command="$1"
     case "$command" in
-        deps|detect|setup|configure|build|flash|run|completion)
+        deps|detect|setup|configure|build|flash|post-install|run)
             shift
             "cmd_$command" "$@"
             ;;

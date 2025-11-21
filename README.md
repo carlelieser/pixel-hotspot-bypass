@@ -58,8 +58,8 @@ phb.sh build --help
 - `configure` - Apply selected patches (KernelSU, TTL/HL bypass, etc.)
 - `build` - Compile kernel
 - `flash` - Flash kernel to device
+- `post-install` - Install KSU manager APK and unlimited-hotspot module
 - `run` - Execute full workflow (setup → configure → build → flash)
-- `completion` - Generate shell completion script
 
 ## Available Patches
 
@@ -87,6 +87,29 @@ Subsequent runs automatically use saved configuration:
 2. **Configure** - Apply selected patches (KernelSU, TTL/HL bypass)
 3. **Build** - Compile kernel and generate boot images
 4. **Flash** - Install boot images via fastboot
+5. **Post-Install** - Install KSU manager and modules (optional)
+
+## Post-Install
+
+After flashing the kernel, install the KernelSU manager and modules:
+
+```bash
+# Install KernelSU-Next manager and unlimited-hotspot module
+./phb.sh post-install
+
+# Use original KernelSU manager instead
+./phb.sh post-install --manager ksu
+
+# Only install the unlimited-hotspot module
+./phb.sh post-install --skip-manager
+```
+
+The post-install command will:
+1. Download and install the KSU/KSUNext manager APK
+2. Download the [unlimited-hotspot](https://github.com/felikcat/unlimited-hotspot) module
+3. Push the module to your device's Download folder
+
+After running, open the KSU manager app and install the module from `/sdcard/Download/`.
 
 ## Supported Devices
 
@@ -115,5 +138,8 @@ Subsequent runs automatically use saved configuration:
 
 # Quick rebuild after code changes
 ./phb.sh run --skip-setup --skip-configure
+
+# After flashing, install KSU manager and unlimited-hotspot module
+./phb.sh post-install
 ```
 
