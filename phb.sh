@@ -44,7 +44,7 @@ CONFIG_FILE="$ROOT_DIR/.phb.conf"
 
 show_main_help() {
     cat << EOF
-${COLOR_BOLD}Pixel Hotspot Bypass (phb)${COLOR_RESET} - Kernel build tool with KernelSU + TTL/HL bypass
+${COLOR_BOLD}Pixel Hotspot Bypass (phb)${COLOR_RESET} - Kernel build tool with KernelSU + TTL/HL
 
 ${COLOR_BOLD}USAGE:${COLOR_RESET}
   phb <command> [options]
@@ -123,7 +123,7 @@ ${COLOR_BOLD}OPTIONS:${COLOR_RESET}
 
 ${COLOR_BOLD}AVAILABLE PATCHES:${COLOR_RESET}
   ${COLOR_GREEN}kernelsu${COLOR_RESET}     - KernelSU-Next root solution
-  ${COLOR_GREEN}ttl-hl${COLOR_RESET}       - TTL/HL hotspot bypass modifications
+  ${COLOR_GREEN}ttl-hl${COLOR_RESET}       - TTL/HL hotspot modifications
   ${COLOR_GREEN}wild${COLOR_RESET}         - WildKernels patches (hooks, bypass, susfs fixes)
   ${COLOR_GREEN}sultan${COLOR_RESET}       - Sultan patches (KSU/syscall hooks)
 
@@ -431,9 +431,9 @@ interactive_patch_selection() {
         ENABLE_KERNELSU=true
     fi
 
-    # Step 2: Ask about TTL/HL Bypass
+    # Step 2: Ask about TTL/HL
     local ttl_selection
-    ttl_selection=$(ui_select "Enable TTL/HL Bypass?" \
+    ttl_selection=$(ui_select "Enable TTL/HL?" \
         "Yes (hotspot tethering)" \
         "No")
     if [[ "$ttl_selection" == "Yes"* ]]; then
@@ -484,7 +484,7 @@ interactive_patch_selection() {
     echo ""
     ui_info "Configuration:"
     [[ "$ENABLE_KERNELSU" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} KernelSU-Next (kprobes)" || echo "  ${COLOR_GRAY}○${COLOR_RESET} KernelSU-Next"
-    [[ "$ENABLE_TTL_BYPASS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} TTL/HL Bypass" || echo "  ${COLOR_GRAY}○${COLOR_RESET} TTL/HL Bypass"
+    [[ "$ENABLE_TTL_BYPASS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} TTL/HL" || echo "  ${COLOR_GRAY}○${COLOR_RESET} TTL/HL"
     if [[ ${#selected_patches[@]} -gt 0 ]]; then
         for p in "${selected_patches[@]}"; do
             echo "  ${COLOR_GREEN}✓${COLOR_RESET} $p"
@@ -522,7 +522,7 @@ run_interactive_setup() {
     # Determine features string
     local features_str=""
     [[ "$ENABLE_KERNELSU" = true ]] && features_str="KernelSU-Next"
-    [[ "$ENABLE_TTL_BYPASS" = true ]] && features_str="${features_str:+$features_str + }TTL/HL Bypass"
+    [[ "$ENABLE_TTL_BYPASS" = true ]] && features_str="${features_str:+$features_str + }TTL/HL"
     [[ -z "$features_str" ]] && features_str="None"
 
     # Count selected patches
