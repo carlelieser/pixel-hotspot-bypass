@@ -195,22 +195,19 @@ ui_checklist() {
     local -a items=("$@")
     local -a selected=()
     for item in "${items[@]}"; do
-        selected+=("true")
+        selected+=("false")
     done
     local current=0
     local key
-    if [[ "$UI_INTERACTIVE_MODE" == "true" ]]; then
-        tput rc >/dev/tty 2>/dev/null || true
-        tput ed >/dev/tty 2>/dev/null || true
-    else
-        tput sc >/dev/tty 2>/dev/null || true
-    fi
-    tput civis >/dev/tty 2>/dev/null || true
+
+    # Enter alternate screen buffer, hide cursor
+    printf '\033[?1049h\033[?25l\033[H' >/dev/tty
+
     while true; do
-        tput rc >/dev/tty 2>/dev/null || true
-        tput ed >/dev/tty 2>/dev/null || true
-        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
-        echo "" >/dev/tty
+        # Move to top-left and clear screen
+        printf '\033[H\033[J' >/dev/tty
+
+        printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
         for ((i=0; i<${#items[@]}; i++)); do
             local checkbox="☐"
             local color=""
@@ -219,13 +216,13 @@ ui_checklist() {
                 color="${COLOR_GREEN}"
             fi
             if [[ $i -eq $current ]]; then
-                echo "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
             else
-                echo "  ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
+                printf '%s\n' "  ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
             fi
         done
-        echo "" >/dev/tty
-        echo "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
+        printf '\n%s\n' "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
+
         IFS= read -rsn1 key </dev/tty
         case "$key" in
             $'\x1b')
@@ -245,9 +242,10 @@ ui_checklist() {
             '') break ;;
         esac
     done
-    tput cnorm >/dev/tty 2>/dev/null || true
-    tput rc >/dev/tty 2>/dev/null || true
-    tput ed >/dev/tty 2>/dev/null || true
+
+    # Exit alternate screen buffer, show cursor
+    printf '\033[?25h\033[?1049l' >/dev/tty
+
     local result=()
     for ((i=0; i<${#items[@]}; i++)); do
         if [[ "${selected[$i]}" == "true" ]]; then
@@ -263,27 +261,24 @@ ui_select() {
     local -a items=("$@")
     local current=0
     local key
-    if [[ "$UI_INTERACTIVE_MODE" == "true" ]]; then
-        tput rc >/dev/tty 2>/dev/null || true
-        tput ed >/dev/tty 2>/dev/null || true
-    else
-        tput sc >/dev/tty 2>/dev/null || true
-    fi
-    tput civis >/dev/tty 2>/dev/null || true
+
+    # Enter alternate screen buffer, hide cursor
+    printf '\033[?1049h\033[?25l\033[H' >/dev/tty
+
     while true; do
-        tput rc >/dev/tty 2>/dev/null || true
-        tput ed >/dev/tty 2>/dev/null || true
-        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
-        echo "" >/dev/tty
+        # Move to top-left and clear screen
+        printf '\033[H\033[J' >/dev/tty
+
+        printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
         for ((i=0; i<${#items[@]}; i++)); do
             if [[ $i -eq $current ]]; then
-                echo "${COLOR_CYAN}▸${COLOR_RESET} ${COLOR_GREEN}○${COLOR_RESET} ${items[$i]}" >/dev/tty
+                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${COLOR_GREEN}●${COLOR_RESET} ${items[$i]}" >/dev/tty
             else
-                echo "  ○ ${items[$i]}" >/dev/tty
+                printf '%s\n' "  ○ ${items[$i]}" >/dev/tty
             fi
         done
-        echo "" >/dev/tty
-        echo "${COLOR_GRAY}↑/↓: Navigate  Enter: Select${COLOR_RESET}" >/dev/tty
+        printf '\n%s\n' "${COLOR_GRAY}↑/↓: Navigate  Enter: Select${COLOR_RESET}" >/dev/tty
+
         IFS= read -rsn1 key </dev/tty
         case "$key" in
             $'\x1b')
@@ -296,9 +291,10 @@ ui_select() {
             '') break ;;
         esac
     done
-    tput cnorm >/dev/tty 2>/dev/null || true
-    tput rc >/dev/tty 2>/dev/null || true
-    tput ed >/dev/tty 2>/dev/null || true
+
+    # Exit alternate screen buffer, show cursor
+    printf '\033[?25h\033[?1049l' >/dev/tty
+
     echo "${items[$current]}"
 }
 
@@ -329,6 +325,182 @@ ui_box() {
         printf "│ %-$((max_width - 2))s │\n" "$line"
     done
     echo "╰$(printf '─%.0s' $(seq 1 $((max_width))))╯"
+}
+
+# Checklist with conflict detection for patches
+# Usage: ui_checklist_with_conflicts "title" target_dir
+# Args passed via global arrays: UI_CWC_ITEMS, UI_CWC_TYPES, UI_CWC_PATCH_FILES, UI_CWC_KPROBES_ENABLED
+ui_checklist_with_conflicts() {
+    local title="$1"
+    local target_dir="$2"
+
+    # Arrays passed via globals (bash limitation for array passing)
+    local -a items=("${UI_CWC_ITEMS[@]}")
+    local -a types=("${UI_CWC_TYPES[@]}")
+    local -a patch_files=("${UI_CWC_PATCH_FILES[@]}")
+    local kprobes_enabled="${UI_CWC_KPROBES_ENABLED:-false}"
+
+    local -a selected=()
+    local -a disabled=()
+    local -a conflict_reason=()
+
+    # Helper: check if patch requires manual hooks (incompatible with kprobes)
+    _patch_requires_manual_hooks() {
+        local patch_file="$1"
+        grep -qE '(CONFIG_KSU_KPROBES_HOOK.*n|!defined.*CONFIG_KSU.*KPROBES|ksu_handle_|ksu_.*_hook)' "$patch_file" 2>/dev/null
+    }
+
+    # Initialize state for each item
+    for ((i=0; i<${#items[@]}; i++)); do
+        selected+=("false")
+        # Check if patch requires manual hooks and kprobes is enabled
+        if [[ "$kprobes_enabled" == "true" && -n "${patch_files[$i]}" ]]; then
+            if _patch_requires_manual_hooks "${patch_files[$i]}"; then
+                disabled+=("true")
+                conflict_reason+=("requires manual hooks (kprobes enabled)")
+            else
+                disabled+=("false")
+                conflict_reason+=("")
+            fi
+        else
+            disabled+=("false")
+            conflict_reason+=("")
+        fi
+    done
+
+    local current=0
+    local key
+    local num_lines=0  # Track lines printed for cursor movement
+
+    # Helper: check if patch j conflicts with any selected patch
+    _check_conflicts_for_item() {
+        local idx="$1"
+
+        # Only patches can have conflicts
+        [[ "${types[$idx]}" != "patch" ]] && return 1
+        [[ -z "${patch_files[$idx]}" ]] && return 1
+
+        local patch_file="${patch_files[$idx]}"
+        local files_j=$(grep -E "^(\+\+\+|---) " "$patch_file" 2>/dev/null | \
+            sed -E 's#^(\+\+\+|---) (\.?/|[ab]/)?##' | sed 's/\t.*//' | sort -u)
+
+        for ((k=0; k<${#items[@]}; k++)); do
+            [[ $k -eq $idx ]] && continue
+            [[ "${selected[$k]}" != "true" ]] && continue
+            [[ "${types[$k]}" != "patch" ]] && continue
+            [[ -z "${patch_files[$k]}" ]] && continue
+
+            local patch_k="${patch_files[$k]}"
+            local files_k=$(grep -E "^(\+\+\+|---) " "$patch_k" 2>/dev/null | \
+                sed -E 's#^(\+\+\+|---) (\.?/|[ab]/)?##' | sed 's/\t.*//' | sort -u)
+
+            # Check for common files
+            local common=$(comm -12 <(echo "$files_j") <(echo "$files_k") 2>/dev/null)
+            if [[ -n "$common" ]]; then
+                echo "${items[$k]}"
+                return 0
+            fi
+        done
+        return 1
+    }
+
+    # Helper: recalculate all conflicts
+    _recalculate_conflicts() {
+        for ((i=0; i<${#items[@]}; i++)); do
+            # Skip if already disabled due to kprobes incompatibility
+            if [[ "$kprobes_enabled" == "true" && -n "${patch_files[$i]}" ]]; then
+                if _patch_requires_manual_hooks "${patch_files[$i]}"; then
+                    disabled[$i]="true"
+                    conflict_reason[$i]="requires manual hooks (kprobes enabled)"
+                    continue
+                fi
+            fi
+
+            if [[ "${selected[$i]}" == "true" ]]; then
+                disabled[$i]="false"
+                conflict_reason[$i]=""
+                continue
+            fi
+
+            local conflicting_with
+            conflicting_with=$(_check_conflicts_for_item "$i")
+            if [[ $? -eq 0 && -n "$conflicting_with" ]]; then
+                disabled[$i]="true"
+                conflict_reason[$i]="conflicts with $conflicting_with"
+            else
+                disabled[$i]="false"
+                conflict_reason[$i]=""
+            fi
+        done
+    }
+
+    # Enter alternate screen buffer, hide cursor
+    printf '\033[?1049h\033[?25l\033[H' >/dev/tty
+
+    while true; do
+        # Move to top-left and clear screen
+        printf '\033[H\033[J' >/dev/tty
+
+        printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
+
+        for ((i=0; i<${#items[@]}; i++)); do
+            local checkbox="☐"
+            local color=""
+            local suffix=""
+
+            if [[ "${disabled[$i]}" == "true" ]]; then
+                checkbox="☒"
+                color="${COLOR_GRAY}"
+                suffix=" (${conflict_reason[$i]})"
+            elif [[ "${selected[$i]}" == "true" ]]; then
+                checkbox="☑"
+                color="${COLOR_GREEN}"
+            fi
+
+            if [[ $i -eq $current ]]; then
+                printf '%s\n' "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
+            else
+                printf '%s\n' "  ${color}${checkbox} ${items[$i]}${suffix}${COLOR_RESET}" >/dev/tty
+            fi
+        done
+
+        printf '\n%s\n' "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
+
+        IFS= read -rsn1 key </dev/tty
+        case "$key" in
+            $'\x1b')
+                IFS= read -rsn2 -t 0.1 key </dev/tty
+                case "$key" in
+                    '[A') ((current--)); if [[ $current -lt 0 ]]; then current=$((${#items[@]} - 1)); fi ;;
+                    '[B') ((current++)); if [[ $current -ge ${#items[@]} ]]; then current=0; fi ;;
+                esac
+                ;;
+            ' ')
+                # Only toggle if not disabled
+                if [[ "${disabled[$current]}" != "true" ]]; then
+                    if [[ "${selected[$current]}" == "true" ]]; then
+                        selected[$current]="false"
+                    else
+                        selected[$current]="true"
+                    fi
+                    # Recalculate conflicts after toggle
+                    _recalculate_conflicts
+                fi
+                ;;
+            '') break ;;
+        esac
+    done
+
+    # Exit alternate screen buffer, show cursor
+    printf '\033[?25h\033[?1049l' >/dev/tty
+
+    local result=()
+    for ((i=0; i<${#items[@]}; i++)); do
+        if [[ "${selected[$i]}" == "true" ]]; then
+            result+=("${items[$i]}")
+        fi
+    done
+    echo "${result[*]}"
 }
 
 trap 'ui_spinner_stop; tput cnorm 2>/dev/null || true' EXIT INT TERM
