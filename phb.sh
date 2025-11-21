@@ -412,26 +412,36 @@ interactive_device_selection() {
 }
 
 interactive_patch_selection() {
-    local selected=$(ui_checklist "Select Patches" \
-        "KernelSU-Next (Root solution)" \
-        "TTL/HL Bypass (Hotspot tethering)" \
-        "Wild (WildKernels hooks/bypass/susfs)" \
-        "Sultan (KSU/syscall hooks)")
+    # Flavor selection - mutually exclusive options
+    local flavor=$(ui_select "Select Kernel Flavor" \
+        "KernelSU-Next + Sultan (Root + Sultan hooks)" \
+        "KernelSU-Next (Root only)" \
+        "Wild (WildKernels manual hooks)")
+
     ENABLE_KERNELSU=false
-    ENABLE_TTL_BYPASS=false
     ENABLE_WILD=false
     ENABLE_SULTAN=false
-    if echo "$selected" | grep -q "KernelSU"; then
-        ENABLE_KERNELSU=true
-    fi
-    if echo "$selected" | grep -q "TTL/HL"; then
+
+    case "$flavor" in
+        "KernelSU-Next + Sultan"*)
+            ENABLE_KERNELSU=true
+            ENABLE_SULTAN=true
+            ;;
+        "KernelSU-Next"*)
+            ENABLE_KERNELSU=true
+            ;;
+        "Wild"*)
+            ENABLE_WILD=true
+            ;;
+    esac
+
+    # TTL/HL Bypass is independent - always ask
+    local ttl_selection=$(ui_select "TTL/HL Bypass (Hotspot tethering)" \
+        "Yes (Enable bypass)" \
+        "No (Skip)")
+    ENABLE_TTL_BYPASS=false
+    if [[ "$ttl_selection" == "Yes"* ]]; then
         ENABLE_TTL_BYPASS=true
-    fi
-    if echo "$selected" | grep -q "Wild"; then
-        ENABLE_WILD=true
-    fi
-    if echo "$selected" | grep -q "Sultan"; then
-        ENABLE_SULTAN=true
     fi
 }
 
@@ -460,21 +470,22 @@ run_interactive_setup() {
     ui_interactive_end
     ui_header "Configuration Summary"
     echo ""
-    local patches=()
-    [[ "$ENABLE_KERNELSU" = true ]] && patches+=("KernelSU")
-    [[ "$ENABLE_TTL_BYPASS" = true ]] && patches+=("TTL/HL Bypass")
-    [[ "$ENABLE_WILD" = true ]] && patches+=("Wild")
-    [[ "$ENABLE_SULTAN" = true ]] && patches+=("Sultan")
-    local patches_str
-    if [[ ${#patches[@]} -eq 0 ]]; then
-        patches_str="None"
+    # Determine flavor string
+    local flavor_str
+    if [[ "$ENABLE_KERNELSU" = true && "$ENABLE_SULTAN" = true ]]; then
+        flavor_str="KernelSU-Next + Sultan"
+    elif [[ "$ENABLE_KERNELSU" = true ]]; then
+        flavor_str="KernelSU-Next"
+    elif [[ "$ENABLE_WILD" = true ]]; then
+        flavor_str="Wild"
     else
-        patches_str=$(IFS=", "; echo "${patches[*]}")
+        flavor_str="None"
     fi
+    [[ "$ENABLE_TTL_BYPASS" = true ]] && flavor_str="$flavor_str + TTL/HL Bypass"
     ui_table_kv \
         "Device" "$DEVICE_CODENAME" \
         "Branch" "$MANIFEST_BRANCH" \
-        "Patches" "$patches_str" \
+        "Flavor" "$flavor_str" \
         "LTO" "$LTO" \
         "Build Type" "$([ "$CLEAN_BUILD" = "1" ] && echo "Clean" || echo "Incremental")"
     echo ""

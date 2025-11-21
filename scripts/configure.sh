@@ -12,6 +12,7 @@ KERNELSU_BRANCH="${KERNELSU_BRANCH:-next}"
 KSU_VERSION="${KSU_VERSION:-12882}"
 KSU_VERSION_TAG="${KSU_VERSION_TAG:-v1.1.1}"
 AUTO_EXPUNGE="${AUTO_EXPUNGE:-0}"
+ENABLE_KERNELSU="${ENABLE_KERNELSU:-true}"
 ENABLE_WILD="${ENABLE_WILD:-false}"
 ENABLE_SULTAN="${ENABLE_SULTAN:-false}"
 WILDKERNELS_REPO="https://raw.githubusercontent.com/WildKernels/kernel_patches/main"
@@ -391,12 +392,17 @@ apply_wild_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Wild Patches${COLOR_RESET}"
-    echo "  ${COLOR_GRAY}Note: Hook patches skipped for KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
-    # Skip hook patches - they're for manual hook KSU, not KernelSU-Next which uses kprobes
-    # The hooks and syscall_hooks patches are interdependent and incompatible with kprobe-based KSU
+    # Wild flavor uses manual hooks (not kprobes)
+    # Apply hook patches
+    [[ -f "${patches_dir}/hooks/ksu_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/ksu_hooks.patch" "wild/ksu_hooks"
+    [[ -f "${patches_dir}/hooks/syscall_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/syscall_hooks.patch" "wild/syscall_hooks"
+    [[ -f "${patches_dir}/hooks/scope_min_manual_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/hooks/scope_min_manual_hooks.patch" "wild/scope_min_manual_hooks"
 
-    # Apply bypass patches only
+    # Apply bypass patches
     [[ -f "${patches_dir}/bypass/abi_bypass_gki.patch" ]] && \
         apply_patch_file "${patches_dir}/bypass/abi_bypass_gki.patch" "wild/abi_bypass_gki"
 }
@@ -406,10 +412,12 @@ apply_sultan_patches() {
 
     echo ""
     echo "${COLOR_BOLD}Apply Sultan Patches${COLOR_RESET}"
-    echo "  ${COLOR_GRAY}Note: Hook patches skipped for KernelSU-Next (uses kprobes)${COLOR_RESET}"
 
-    # Skip hook patches - they're for manual hook KSU, not KernelSU-Next which uses kprobes
-    # Only sys.c_fix may be applicable
+    # Sultan patches for KernelSU-Next + Sultan flavor
+    [[ -f "${patches_dir}/ksu_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/ksu_hooks.patch" "sultan/ksu_hooks"
+    [[ -f "${patches_dir}/syscall_hooks.patch" ]] && \
+        apply_patch_file "${patches_dir}/syscall_hooks.patch" "sultan/syscall_hooks"
     [[ -f "${patches_dir}/sys.c_fix.patch" ]] && \
         apply_patch_file "${patches_dir}/sys.c_fix.patch" "sultan/sys.c_fix"
 }
@@ -452,7 +460,15 @@ print_summary() {
 run_configure() {
     ui_header "Configure Kernel"
     echo "  Device: ${COLOR_CYAN}$DEVICE_CODENAME${COLOR_RESET}"
-    echo "  KernelSU: ${COLOR_GRAY}${KSU_VERSION} (${KSU_VERSION_TAG})${COLOR_RESET}"
+
+    # Show flavor info
+    if [[ "$ENABLE_KERNELSU" == "true" && "$ENABLE_SULTAN" == "true" ]]; then
+        echo "  Flavor: ${COLOR_GRAY}KernelSU-Next + Sultan${COLOR_RESET}"
+    elif [[ "$ENABLE_KERNELSU" == "true" ]]; then
+        echo "  Flavor: ${COLOR_GRAY}KernelSU-Next${COLOR_RESET}"
+    elif [[ "$ENABLE_WILD" == "true" ]]; then
+        echo "  Flavor: ${COLOR_GRAY}Wild (manual hooks)${COLOR_RESET}"
+    fi
 
     if [[ ! -d "${KERNEL_DIR}/aosp" ]]; then
         echo ""
@@ -461,23 +477,26 @@ run_configure() {
         exit 1
     fi
 
-    # Apply Wild/Sultan patches FIRST (before KernelSU-Next)
+    # Apply flavor-specific patches
     if [[ "$ENABLE_WILD" == "true" ]]; then
+        # Wild flavor: manual hooks, no KernelSU-Next
         download_wild_patches
         apply_wild_patches
-    fi
+    elif [[ "$ENABLE_KERNELSU" == "true" ]]; then
+        # KernelSU-Next flavors
+        if [[ "$ENABLE_SULTAN" == "true" ]]; then
+            # Apply Sultan patches before KernelSU-Next
+            download_sultan_patches
+            apply_sultan_patches
+        fi
 
-    if [[ "$ENABLE_SULTAN" == "true" ]]; then
-        download_sultan_patches
-        apply_sultan_patches
+        # Clone and integrate KernelSU-Next
+        echo ""
+        echo "${COLOR_BOLD}KernelSU Integration${COLOR_RESET}"
+        clone_kernelsu
+        apply_bazel_version_fix
+        integrate_into_build
     fi
-
-    # Clone and integrate KernelSU-Next AFTER Wild/Sultan patches
-    echo ""
-    echo "${COLOR_BOLD}KernelSU Integration${COLOR_RESET}"
-    clone_kernelsu
-    apply_bazel_version_fix
-    integrate_into_build
 
     apply_defconfig_changes
     apply_gki_defconfig_changes
