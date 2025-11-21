@@ -1,6 +1,6 @@
 # Pixel Hotspot Bypass
 
-Build custom Pixel kernel with KernelSU-Next and TTL/HL hotspot bypass support for Pixel 9 series devices.
+Build custom Pixel kernel with KernelSU-Next and TTL/HL patch support for Pixel 9 series devices.
 
 ## Quick Start
 
@@ -53,11 +53,11 @@ This will guide you through device selection, patch selection, and build options
 | Patch | Description |
 |-------|-------------|
 | `kernelsu` | KernelSU-Next root solution |
-| `ttl-hl` | TTL/HL modifications for hotspot bypass |
+| `ttl-hl` | TTL/HL kernel modifications |
 
 ```bash
 ./phb.sh configure -d tegu --patches kernelsu,ttl-hl   # both patches (default)
-./phb.sh configure -d tegu --patches kernelsu          # root only, no hotspot bypass
+./phb.sh configure -d tegu --patches kernelsu          # root only, no TTL/HL
 ```
 
 ## Post-Install
