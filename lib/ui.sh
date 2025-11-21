@@ -198,13 +198,18 @@ ui_checklist() {
     done
     local current=0
     local key
-    tput sc 2>/dev/null || true
-    tput civis 2>/dev/null || true
+    if [[ "$UI_INTERACTIVE_MODE" == "true" ]]; then
+        tput rc >/dev/tty 2>/dev/null || true
+        tput ed >/dev/tty 2>/dev/null || true
+    else
+        tput sc >/dev/tty 2>/dev/null || true
+    fi
+    tput civis >/dev/tty 2>/dev/null || true
     while true; do
-        tput rc 2>/dev/null || true
-        tput ed 2>/dev/null || true
-        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}"
-        echo ""
+        tput rc >/dev/tty 2>/dev/null || true
+        tput ed >/dev/tty 2>/dev/null || true
+        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
+        echo "" >/dev/tty
         for ((i=0; i<${#items[@]}; i++)); do
             local checkbox="☐"
             local color=""
@@ -213,17 +218,17 @@ ui_checklist() {
                 color="${COLOR_GREEN}"
             fi
             if [[ $i -eq $current ]]; then
-                echo "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${COLOR_RESET}"
+                echo "${COLOR_CYAN}▸${COLOR_RESET} ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
             else
-                echo "  ${color}${checkbox} ${items[$i]}${COLOR_RESET}"
+                echo "  ${color}${checkbox} ${items[$i]}${COLOR_RESET}" >/dev/tty
             fi
         done
-        echo ""
-        ui_dim "↑/↓: Navigate  Space: Toggle  Enter: Confirm"
-        IFS= read -rsn1 key
+        echo "" >/dev/tty
+        echo "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
+        IFS= read -rsn1 key </dev/tty
         case "$key" in
             $'\x1b')
-                IFS= read -rsn2 -t 0.1 key
+                IFS= read -rsn2 -t 0.1 key </dev/tty
                 case "$key" in
                     '[A') ((current--)); if [[ $current -lt 0 ]]; then current=$((${#items[@]} - 1)); fi ;;
                     '[B') ((current++)); if [[ $current -ge ${#items[@]} ]]; then current=0; fi ;;
@@ -239,9 +244,9 @@ ui_checklist() {
             '') break ;;
         esac
     done
-    tput cnorm 2>/dev/null || true
-    tput rc 2>/dev/null || true
-    tput ed 2>/dev/null || true
+    tput cnorm >/dev/tty 2>/dev/null || true
+    tput rc >/dev/tty 2>/dev/null || true
+    tput ed >/dev/tty 2>/dev/null || true
     local result=()
     for ((i=0; i<${#items[@]}; i++)); do
         if [[ "${selected[$i]}" == "true" ]]; then
@@ -257,26 +262,31 @@ ui_select() {
     local -a items=("$@")
     local current=0
     local key
-    tput sc 2>/dev/null || true
-    tput civis 2>/dev/null || true
+    if [[ "$UI_INTERACTIVE_MODE" == "true" ]]; then
+        tput rc >/dev/tty 2>/dev/null || true
+        tput ed >/dev/tty 2>/dev/null || true
+    else
+        tput sc >/dev/tty 2>/dev/null || true
+    fi
+    tput civis >/dev/tty 2>/dev/null || true
     while true; do
-        tput rc 2>/dev/null || true
-        tput ed 2>/dev/null || true
-        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}"
-        echo ""
+        tput rc >/dev/tty 2>/dev/null || true
+        tput ed >/dev/tty 2>/dev/null || true
+        echo "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
+        echo "" >/dev/tty
         for ((i=0; i<${#items[@]}; i++)); do
             if [[ $i -eq $current ]]; then
-                echo "${COLOR_CYAN}▸${COLOR_RESET} ${COLOR_GREEN}○${COLOR_RESET} ${items[$i]}"
+                echo "${COLOR_CYAN}▸${COLOR_RESET} ${COLOR_GREEN}○${COLOR_RESET} ${items[$i]}" >/dev/tty
             else
-                echo "  ○ ${items[$i]}"
+                echo "  ○ ${items[$i]}" >/dev/tty
             fi
         done
-        echo ""
-        ui_dim "↑/↓: Navigate  Enter: Select"
-        IFS= read -rsn1 key
+        echo "" >/dev/tty
+        echo "${COLOR_GRAY}↑/↓: Navigate  Enter: Select${COLOR_RESET}" >/dev/tty
+        IFS= read -rsn1 key </dev/tty
         case "$key" in
             $'\x1b')
-                IFS= read -rsn2 -t 0.1 key
+                IFS= read -rsn2 -t 0.1 key </dev/tty
                 case "$key" in
                     '[A') ((current--)); if [[ $current -lt 0 ]]; then current=$((${#items[@]} - 1)); fi ;;
                     '[B') ((current++)); if [[ $current -ge ${#items[@]} ]]; then current=0; fi ;;
@@ -285,10 +295,21 @@ ui_select() {
             '') break ;;
         esac
     done
-    tput cnorm 2>/dev/null || true
-    tput rc 2>/dev/null || true
-    tput ed 2>/dev/null || true
+    tput cnorm >/dev/tty 2>/dev/null || true
+    tput rc >/dev/tty 2>/dev/null || true
+    tput ed >/dev/tty 2>/dev/null || true
     echo "${items[$current]}"
+}
+
+UI_INTERACTIVE_MODE=false
+
+ui_interactive_start() {
+    UI_INTERACTIVE_MODE=true
+    tput sc 2>/dev/null || true
+}
+
+ui_interactive_end() {
+    UI_INTERACTIVE_MODE=false
 }
 
 ui_box() {

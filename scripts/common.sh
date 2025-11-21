@@ -1,18 +1,61 @@
 #!/bin/bash
+# Common utilities for PHB scripts
+# UI functions are in lib/ui.sh - source that for colored output
 
+# Legacy color definitions (for backwards compatibility)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_error_and_exit() { log_error "$1"; exit "${2:-1}"; }
-log_success() { echo -e "${BLUE}[✓]${NC} $1"; }
-log_section() { echo -e "\n${BLUE}=== $1 ===${NC}"; }
+# Legacy logging (delegates to ui.sh if available)
+log_info() {
+    if type ui_info &>/dev/null; then
+        ui_info "$1"
+    else
+        echo -e "${GREEN}[INFO]${NC} $1"
+    fi
+}
 
+log_warn() {
+    if type ui_warning &>/dev/null; then
+        ui_warning "$1"
+    else
+        echo -e "${YELLOW}[WARN]${NC} $1"
+    fi
+}
+
+log_error() {
+    if type ui_error &>/dev/null; then
+        ui_error "$1"
+    else
+        echo -e "${RED}[ERROR]${NC} $1" >&2
+    fi
+}
+
+log_error_and_exit() {
+    log_error "$1"
+    exit "${2:-1}"
+}
+
+log_success() {
+    if type ui_success &>/dev/null; then
+        ui_success "$1"
+    else
+        echo -e "${BLUE}[✓]${NC} $1"
+    fi
+}
+
+log_section() {
+    if type ui_header &>/dev/null; then
+        ui_header "$1"
+    else
+        echo -e "\n${BLUE}=== $1 ===${NC}"
+    fi
+}
+
+# Configuration validation
 validate_required_vars() {
     local missing=()
     [[ -z "$DEVICE_CODENAME" ]] && missing+=("DEVICE_CODENAME")
@@ -22,15 +65,11 @@ validate_required_vars() {
             return 0
         fi
         log_error "Missing required configuration: ${missing[*]}"
-        log_error ""
-        log_error "Either:"
-        log_error "  1. Use --interactive flag for guided setup"
-        log_error "  2. Set environment variables: ${missing[*]}"
-        log_error "  3. Pass via command-line flags (see --help)"
         exit 1
     fi
 }
 
+# Derived variable setup
 set_derived_vars() {
     [[ -z "$BAZEL_CONFIG" ]] && BAZEL_CONFIG="$DEVICE_CODENAME"
     [[ -z "$BUILD_TARGET" ]] && BUILD_TARGET="${SOC}_${DEVICE_CODENAME}_dist"
@@ -63,6 +102,7 @@ check_kernelsu_integrated() {
     fi
 }
 
+# Command availability check
 check_commands() {
     local required_commands=("$@")
     local missing=()
@@ -77,40 +117,15 @@ check_commands() {
     fi
 }
 
+# Device interaction
 check_fastboot_device() {
     if ! command -v fastboot >/dev/null 2>&1; then
         log_error_and_exit "fastboot not found. Please install Android SDK Platform Tools"
     fi
     if ! fastboot devices | grep -q .; then
         log_error "No device found in fastboot mode"
-        log_error "Please boot your device to bootloader mode:"
-        log_error_and_exit "  adb reboot bootloader"
+        log_error_and_exit "Please boot your device to bootloader: adb reboot bootloader"
     fi
-}
-
-print_divider() {
-    local message="${1:-}"
-    echo ""
-    echo "============================================"
-    if [[ -n "$message" ]]; then
-        echo "$message"
-        echo "============================================"
-    fi
-}
-
-ask_confirmation() {
-    local prompt="$1"
-    local default="${2:-N}"
-    local yn_prompt="[y/N]"
-    if [[ "$default" =~ ^[Yy]$ ]]; then
-        yn_prompt="[Y/n]"
-    fi
-    read -p "$prompt $yn_prompt " -n 1 -r
-    echo
-    if [[ -z "$REPLY" ]]; then
-        [[ "$default" =~ ^[Yy]$ ]] && return 0 || return 1
-    fi
-    [[ $REPLY =~ ^[Yy]$ ]] && return 0 || return 1
 }
 
 check_adb_device() {
@@ -163,6 +178,7 @@ build_recommended_branch() {
     echo "android-gs-${device}-${kernel_ver}-${android_ver}${suffix}"
 }
 
+# File operations
 require_file() {
     local file="$1"
     local error_msg="${2:-File not found: $file}"
@@ -192,6 +208,22 @@ check_pattern_exists() {
     return 1
 }
 
+# Interactive prompts
+ask_confirmation() {
+    local prompt="$1"
+    local default="${2:-N}"
+    local yn_prompt="[y/N]"
+    if [[ "$default" =~ ^[Yy]$ ]]; then
+        yn_prompt="[Y/n]"
+    fi
+    read -p "$prompt $yn_prompt " -n 1 -r </dev/tty
+    echo
+    if [[ -z "$REPLY" ]]; then
+        [[ "$default" =~ ^[Yy]$ ]] && return 0 || return 1
+    fi
+    [[ $REPLY =~ ^[Yy]$ ]] && return 0 || return 1
+}
+
 confirm_and_remove_directory() {
     local dir="$1"
     local item_name="${2:-Directory}"
@@ -207,6 +239,58 @@ confirm_and_remove_directory() {
         fi
     fi
     return 0
+}
+
+# Fastboot helpers
+wait_for_fastboot_device() {
+    local max_wait="${1:-30}"
+    local waited=0
+    while ! fastboot devices | grep -q . && [[ $waited -lt $max_wait ]]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    [[ $waited -lt $max_wait ]]
+}
+
+# Branch discovery
+fetch_device_branches() {
+    local device="$1"
+    local manifest_url="${2:-https://android.googlesource.com/kernel/manifest}"
+    local refs_url="${manifest_url}/+refs/heads?format=TEXT"
+
+    curl -sL "$refs_url" 2>/dev/null | \
+        grep -oE "android-gs-${device}-[^ ]+" | \
+        sort -Vr | \
+        head -20
+}
+
+get_device_family() {
+    local codename="$1"
+    case "$codename" in
+        tegu) echo "tegu" ;;
+        tokay|caiman|komodo) echo "caimito" ;;
+        comet) echo "comet" ;;
+        husky|shiba) echo "shusky" ;;
+        akita) echo "akita" ;;
+        felix) echo "felix" ;;
+        lynx) echo "lynx" ;;
+        tangorpro) echo "tangorpro" ;;
+        cheetah|panther) echo "pantah" ;;
+        bluejay) echo "bluejay" ;;
+        oriole|raven) echo "raviole" ;;
+        *) echo "$codename" ;;
+    esac
+}
+
+# Legacy helpers (kept for compatibility)
+print_divider() {
+    local message="${1:-}"
+    echo ""
+    echo "============================================"
+    if [[ -n "$message" ]]; then
+        echo "$message"
+        echo "============================================"
+    fi
 }
 
 disable_makefile_line() {
@@ -228,14 +312,3 @@ copy_image_if_exists() {
     fi
     return 1
 }
-
-wait_for_fastboot_device() {
-    local max_wait="${1:-30}"
-    local waited=0
-    while ! fastboot devices | grep -q . && [[ $waited -lt $max_wait ]]; do
-        sleep 1
-        waited=$((waited + 1))
-    done
-    [[ $waited -lt $max_wait ]]
-}
-

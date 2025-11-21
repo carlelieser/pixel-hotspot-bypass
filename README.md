@@ -2,18 +2,9 @@
 
 Build custom Pixel kernel with KernelSU-Next and TTL/HL hotspot bypass support for Pixel 9 series devices.
 
-## Features
-
-- **KernelSU-Next** - Modern root solution with kernel module support
-- **TTL/HL Bypass** - Tethering hotspot bypass modifications
-- **Modular Patches** - Enable/disable patches via interactive checklist
-- **Modern CLI** - Clean subcommand interface with visual enhancements
-- **Auto-Detection** - Automatically detect device and recommend configuration
-- **Configuration Persistence** - Save settings for seamless subsequent builds
-
 ## Quick Start
 
-### Interactive Mode (Recommended for First Run)
+### Interactive Mode
 
 ```bash
 ./phb.sh run --interactive
@@ -25,23 +16,7 @@ This will guide you through:
 3. Build options (LTO mode, clean build)
 4. Full workflow execution
 
-### Auto-Detect Connected Device
-
-```bash
-./phb.sh detect
-```
-
-Shows device information and recommended configuration.
-
-### Manual Configuration
-
-```bash
-./phb.sh run -d tegu -b android-gs-tegu-6.1-android16
-```
-
 ## Usage
-
-### Modern Subcommand Interface
 
 ```bash
 # Detect connected device
@@ -63,8 +38,6 @@ phb.sh run --skip-setup --skip-configure
 phb.sh --help
 phb.sh build --help
 ```
-
-### Legacy Flag Interface (Backward Compatible)
 
 ```bash
 # Full workflow
@@ -106,20 +79,6 @@ Subsequent runs automatically use saved configuration:
 
 # Subsequent runs - uses saved config
 ./phb.sh run
-```
-
-## Shell Completion
-
-Generate completion scripts for bash or zsh:
-
-```bash
-# Bash
-./phb.sh completion bash > /etc/bash_completion.d/phb
-source ~/.bashrc
-
-# Zsh
-./phb.sh completion zsh > ~/.zsh/completions/_phb
-source ~/.zshrc
 ```
 
 ## Build Process

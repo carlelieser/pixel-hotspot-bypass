@@ -4,8 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/common.sh"
+source "$ROOT_DIR/lib/ui.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"
+CURRENT_SLOT=""
 
 show_usage() {
     cat << EOF
@@ -21,24 +23,6 @@ OPTIONAL OPTIONS:
                             (default: ../out/{device})
   -h, --help                Show this help message
 
-EXAMPLES:
-  $0 -d tegu
-  $0 -d tegu -o /path/to/images
-  export DEVICE_CODENAME=tegu
-  $0
-
-ENVIRONMENT VARIABLES:
-  DEVICE_CODENAME, OUTPUT_DIR
-
-PREREQUISITES:
-  - Device must be in fastboot mode (adb reboot bootloader)
-  - Required images in output directory:
-    * boot.img
-    * dtbo.img
-    * vendor_kernel_boot.img
-    * vendor_dlkm.img
-    * system_dlkm.img
-
 EOF
     exit 0
 }
@@ -49,91 +33,188 @@ parse_arguments() {
             -h|--help) show_usage ;;
             -d|--device) DEVICE_CODENAME="$2"; shift 2 ;;
             -o|--output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-            *) log_error "Unknown option: $1"; echo ""; show_usage ;;
+            *) ui_error "Unknown option: $1"; show_usage ;;
         esac
     done
 }
 
 validate_flash_config() {
-    local missing=()
-    [[ -z "$DEVICE_CODENAME" ]] && missing+=("DEVICE_CODENAME")
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        log_error "Missing required configuration: ${missing[*]}"
-        log_error ""
-        log_error "Either:"
-        log_error "  1. Pass via command-line flags (see --help)"
-        log_error "  2. Set environment variables: ${missing[*]}"
+    if [[ -z "$DEVICE_CODENAME" ]]; then
+        ui_error "Device codename required (-d)"
         exit 1
+    fi
+}
+
+# Progress bar helper
+progress_bar() {
+    local current=$1
+    local total=$2
+    local width=20
+    local filled=$((current * width / total))
+    local empty=$((width - filled))
+
+    printf "${COLOR_GREEN}"
+    printf '█%.0s' $(seq 1 $filled 2>/dev/null) || true
+    printf "${COLOR_GRAY}"
+    printf '░%.0s' $(seq 1 $empty 2>/dev/null) || true
+    printf "${COLOR_RESET}"
+}
+
+# Flash a single partition with progress
+flash_partition() {
+    local partition="$1"
+    local image="$2"
+    local current="$3"
+    local total="$4"
+
+    printf "\r\033[K  [$(progress_bar $current $total)] %d/%d ${COLOR_CYAN}%s${COLOR_RESET}..." "$current" "$total" "$partition"
+
+    if fastboot flash "${partition}_${CURRENT_SLOT}" "$image" &>/dev/null; then
+        printf "\r\033[K  [$(progress_bar $current $total)] %d/%d ${COLOR_GREEN}✓${COLOR_RESET} %s\n" "$current" "$total" "$partition"
+        return 0
+    else
+        printf "\r\033[K  [$(progress_bar $current $total)] %d/%d ${COLOR_RED}✗${COLOR_RESET} %s ${COLOR_RED}failed${COLOR_RESET}\n" "$current" "$total" "$partition"
+        return 1
     fi
 }
 
 check_images() {
     local required_images=("boot.img" "dtbo.img" "vendor_kernel_boot.img" "vendor_dlkm.img" "system_dlkm.img")
+    local found=0
     local missing=()
+
+    echo ""
+    echo "${COLOR_BOLD}Images${COLOR_RESET}"
+
     for img in "${required_images[@]}"; do
-        [[ ! -f "$OUTPUT_DIR/$img" ]] && missing+=("$img")
+        printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking %s..." "$img"
+
+        if [[ -f "$OUTPUT_DIR/$img" ]]; then
+            local size=$(du -h "$OUTPUT_DIR/$img" 2>/dev/null | cut -f1)
+            printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} %-25s ${COLOR_GRAY}%s${COLOR_RESET}\n" "$img" "$size"
+            ((found++))
+        else
+            printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} %-25s ${COLOR_YELLOW}not found${COLOR_RESET}\n" "$img"
+            missing+=("$img")
+        fi
     done
+
     if [[ ${#missing[@]} -gt 0 ]]; then
-        log_error_and_exit "Missing images: ${missing[*]} - run build first"
-    fi
-    log_success "All required images found"
-}
-
-get_current_slot() {
-    local slot=$(fastboot getvar current-slot 2>&1 | grep "current-slot:" | awk '{print $2}' | tr -d '\r')
-    if [[ -z "$slot" ]]; then
-        log_warn "Could not detect current slot, defaulting to 'a'"
-        slot="a"
-    fi
-    echo "$slot"
-}
-
-flash_bootloader_images() {
-    local slot=$(get_current_slot)
-    log_info "Current active slot: $slot"
-    log_info "Flashing bootloader images to slot $slot..."
-    cd "$OUTPUT_DIR"
-    fastboot flash boot_${slot} boot.img
-    fastboot flash dtbo_${slot} dtbo.img
-    fastboot flash vendor_kernel_boot_${slot} vendor_kernel_boot.img
-    log_info "Bootloader images flashed successfully"
-}
-
-flash_fastbootd_images() {
-    local slot=$(get_current_slot)
-    log_info "Rebooting to fastbootd for dynamic partitions..."
-    fastboot reboot fastboot
-    log_info "Waiting for device to enter fastbootd..."
-    sleep 5
-    if ! wait_for_fastboot_device 30; then
-        log_error "Device did not enter fastbootd mode"
-        log_error "Please manually reboot to fastbootd and run:"
-        log_error "  cd $OUTPUT_DIR"
-        log_error "  fastboot flash vendor_dlkm_${slot} vendor_dlkm.img"
-        log_error "  fastboot flash system_dlkm_${slot} system_dlkm.img"
+        echo ""
+        ui_error "Missing images - run build first"
         exit 1
     fi
-    log_info "Flashing dynamic partition images to slot $slot..."
+}
+
+check_device() {
+    echo ""
+    echo "${COLOR_BOLD}Device${COLOR_RESET}"
+
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking fastboot..."
+
+    if ! command -v fastboot &>/dev/null; then
+        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} fastboot not found\n"
+        ui_error "Install Android SDK Platform Tools"
+        exit 1
+    fi
+    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} fastboot found\n"
+
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking device..."
+
+    if ! fastboot devices | grep -q .; then
+        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} No device in fastboot mode\n"
+        echo ""
+        ui_info "Boot to fastboot: ${COLOR_CYAN}adb reboot bootloader${COLOR_RESET}"
+        exit 1
+    fi
+    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Device connected\n"
+
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Getting slot..."
+
+    CURRENT_SLOT=$(fastboot getvar current-slot 2>&1 | grep "current-slot:" | awk '{print $2}' | tr -d '\r')
+    if [[ -z "$CURRENT_SLOT" ]]; then
+        CURRENT_SLOT="a"
+        printf "\r\033[K  ${COLOR_YELLOW}⚠${COLOR_RESET} Slot unknown, using ${COLOR_CYAN}%s${COLOR_RESET}\n" "$CURRENT_SLOT"
+    else
+        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Active slot: ${COLOR_CYAN}%s${COLOR_RESET}\n" "$CURRENT_SLOT"
+    fi
+}
+
+flash_bootloader() {
+    echo ""
+    echo "${COLOR_BOLD}Flashing Bootloader Partitions${COLOR_RESET}"
+
     cd "$OUTPUT_DIR"
-    fastboot flash vendor_dlkm_${slot} vendor_dlkm.img
-    fastboot flash system_dlkm_${slot} system_dlkm.img
-    log_info "Dynamic partition images flashed successfully"
+
+    flash_partition "boot" "boot.img" 1 5
+    flash_partition "dtbo" "dtbo.img" 2 5
+    flash_partition "vendor_kernel_boot" "vendor_kernel_boot.img" 3 5
+}
+
+flash_dynamic() {
+    echo ""
+    echo "${COLOR_BOLD}Flashing Dynamic Partitions${COLOR_RESET}"
+
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Rebooting to fastbootd..."
+    fastboot reboot fastboot &>/dev/null
+    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Rebooting to fastbootd\n"
+
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Waiting for fastbootd..."
+
+    local waited=0
+    local max_wait=30
+    while ! fastboot devices 2>/dev/null | grep -q . && [[ $waited -lt $max_wait ]]; do
+        sleep 1
+        ((waited++))
+        # Animate spinner
+        local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+        printf "\r  ${COLOR_BLUE}${frames[$((waited % 10))]}${COLOR_RESET} Waiting for fastbootd... ${COLOR_GRAY}%ds${COLOR_RESET}" "$waited"
+    done
+
+    if [[ $waited -ge $max_wait ]]; then
+        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Timeout waiting for fastbootd\n"
+        echo ""
+        ui_error "Manually flash remaining partitions:"
+        echo "  ${COLOR_GRAY}fastboot flash vendor_dlkm_${CURRENT_SLOT} vendor_dlkm.img${COLOR_RESET}"
+        echo "  ${COLOR_GRAY}fastboot flash system_dlkm_${CURRENT_SLOT} system_dlkm.img${COLOR_RESET}"
+        exit 1
+    fi
+
+    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Device in fastbootd ${COLOR_GRAY}(%ds)${COLOR_RESET}\n" "$waited"
+
+    cd "$OUTPUT_DIR"
+
+    flash_partition "vendor_dlkm" "vendor_dlkm.img" 4 5
+    flash_partition "system_dlkm" "system_dlkm.img" 5 5
 }
 
 reboot_device() {
-    log_info "Rebooting device..."
-    fastboot reboot
-    log_info "Device is rebooting"
+    echo ""
+    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Rebooting device..."
+    fastboot reboot &>/dev/null
+    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Device rebooting\n"
+}
+
+print_summary() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "${COLOR_GREEN}✓${COLOR_RESET} Flash complete! Device is rebooting."
+    echo ""
+    echo "  After boot, verify with:"
+    echo "  ${COLOR_GRAY}adb shell uname -r${COLOR_RESET}"
 }
 
 run_flash() {
-    log_section "Flash Kernel"
+    ui_header "Flash Kernel"
+    echo "  Device: ${COLOR_CYAN}$DEVICE_CODENAME${COLOR_RESET}"
+    echo "  Output: ${COLOR_GRAY}$OUTPUT_DIR${COLOR_RESET}"
+
     check_images
-    check_fastboot_device
-    flash_bootloader_images
-    flash_fastbootd_images
+    check_device
+    flash_bootloader
+    flash_dynamic
     reboot_device
-    log_success "Flash complete"
+    print_summary
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

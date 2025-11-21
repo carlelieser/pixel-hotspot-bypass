@@ -47,6 +47,7 @@ ${COLOR_BOLD}USAGE:${COLOR_RESET}
   phb [legacy-flags]           (backward compatible)
 
 ${COLOR_BOLD}COMMANDS:${COLOR_RESET}
+  ${COLOR_CYAN}deps${COLOR_RESET}                Check and install dependencies
   ${COLOR_CYAN}detect${COLOR_RESET}              Auto-detect connected device and show config
   ${COLOR_CYAN}setup${COLOR_RESET}               Download and setup kernel source
   ${COLOR_CYAN}configure${COLOR_RESET}           Apply selected patches to kernel
@@ -174,6 +175,26 @@ ${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
 EOF
 }
 
+show_deps_help() {
+    cat << EOF
+${COLOR_BOLD}phb deps${COLOR_RESET} - Check and install dependencies
+
+${COLOR_BOLD}USAGE:${COLOR_RESET}
+  phb deps [options]
+
+${COLOR_BOLD}OPTIONS:${COLOR_RESET}
+  -i, --install      Install missing dependencies (requires sudo)
+  -n, --dry-run      Show what would be installed without installing
+  -h, --help         Show this help
+
+${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
+  phb deps                # Check dependencies only
+  phb deps --install      # Check and install missing dependencies
+  phb deps --dry-run      # Show what would be installed
+
+EOF
+}
+
 show_run_help() {
     cat << EOF
 ${COLOR_BOLD}phb run${COLOR_RESET} - Execute full kernel build workflow
@@ -225,6 +246,15 @@ load_config() {
         return 0
     fi
     return 1
+}
+
+cmd_deps() {
+    for arg in "$@"; do
+        case "$arg" in
+            -h|--help) show_deps_help; exit 0 ;;
+        esac
+    done
+    "$SCRIPT_DIR/scripts/install-dependencies.sh" "$@"
 }
 
 cmd_detect() {
@@ -288,6 +318,10 @@ interactive_device_selection() {
             "comet (Pixel 9 Pro Fold)")
         DEVICE_CODENAME=$(echo "$selection" | awk '{print $1}')
     fi
+
+    local device_family=$(get_device_family "$DEVICE_CODENAME")
+    local recommended_branch=""
+
     if [[ -n "$auto_detected" && "$auto_detected" == "$DEVICE_CODENAME" ]]; then
         local android_version=$(get_device_property "ro.build.version.release")
         local kernel_version=$(get_kernel_version)
@@ -295,13 +329,48 @@ interactive_device_selection() {
         local kernel_major_minor=$(parse_kernel_major_minor "$kernel_version")
         local android_manifest=$(get_android_manifest_version "$android_version")
         local suggested_suffix=$(detect_build_suffix "$build_fingerprint")
-        MANIFEST_BRANCH=$(build_recommended_branch "$DEVICE_CODENAME" "$kernel_major_minor" "$android_manifest" "$suggested_suffix")
-        ui_success "Auto-detected branch: $MANIFEST_BRANCH"
-    else
-        echo ""
-        ui_info "Enter manifest branch (e.g., android-gs-tegu-6.1-android16):"
-        read -p "> " MANIFEST_BRANCH
+        recommended_branch=$(build_recommended_branch "$device_family" "$kernel_major_minor" "$android_manifest" "$suggested_suffix")
     fi
+
+    echo ""
+    ui_spinner_start "Fetching available branches for $device_family..."
+    local branches_raw
+    branches_raw=$(fetch_device_branches "$device_family" "$MANIFEST_URL")
+    ui_spinner_stop
+
+    if [[ -z "$branches_raw" ]]; then
+        ui_warning "Could not fetch branches. Enter manually:"
+        read -p "> " MANIFEST_BRANCH </dev/tty
+        return
+    fi
+
+    local -a branches=()
+    while IFS= read -r branch; do
+        [[ -n "$branch" ]] && branches+=("$branch")
+    done <<< "$branches_raw"
+
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        ui_warning "No branches found for $device_family. Enter manually:"
+        read -p "> " MANIFEST_BRANCH </dev/tty
+        return
+    fi
+
+    if [[ -n "$recommended_branch" ]]; then
+        local -a sorted_branches=()
+        for b in "${branches[@]}"; do
+            if [[ "$b" == "$recommended_branch" ]]; then
+                sorted_branches=("$b (recommended)" "${sorted_branches[@]}")
+            else
+                sorted_branches+=("$b")
+            fi
+        done
+        branches=("${sorted_branches[@]}")
+    fi
+
+    local branch_selection
+    branch_selection=$(ui_select "Select Branch" "${branches[@]}")
+    MANIFEST_BRANCH="${branch_selection% (recommended)}"
+    ui_success "Selected branch: $MANIFEST_BRANCH"
 }
 
 interactive_patch_selection() {
@@ -336,13 +405,11 @@ interactive_build_options() {
 
 run_interactive_setup() {
     ui_header "Interactive Setup"
-    echo ""
+    ui_interactive_start
     interactive_device_selection
-    echo ""
     interactive_patch_selection
-    echo ""
     interactive_build_options
-    echo ""
+    ui_interactive_end
     ui_header "Configuration Summary"
     echo ""
     ui_table_kv \
@@ -631,7 +698,7 @@ main() {
     fi
     local command="$1"
     case "$command" in
-        detect|setup|configure|build|flash|run|completion)
+        deps|detect|setup|configure|build|flash|run|completion)
             shift
             "cmd_$command" "$@"
             ;;
