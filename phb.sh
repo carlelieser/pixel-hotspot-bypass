@@ -113,17 +113,17 @@ ${COLOR_BOLD}USAGE:${COLOR_RESET}
 
 ${COLOR_BOLD}OPTIONS:${COLOR_RESET}
   -d, --device NAME      Device codename (required)
-  --patches LIST         Comma-separated patches (kernelsu,ttl-bypass)
+  --patches LIST         Comma-separated patches (kernelsu,ttl-hl)
   --interactive          Interactive patch selection
   -h, --help             Show this help
 
 ${COLOR_BOLD}AVAILABLE PATCHES:${COLOR_RESET}
   ${COLOR_GREEN}kernelsu${COLOR_RESET}     - KernelSU-Next root solution
-  ${COLOR_GREEN}ttl-bypass${COLOR_RESET}   - TTL/HL hotspot bypass modifications
+  ${COLOR_GREEN}ttl-hl${COLOR_RESET}   - TTL/HL hotspot bypass modifications
 
 ${COLOR_BOLD}EXAMPLES:${COLOR_RESET}
   phb configure -d tegu                              # Interactive selection
-  phb configure -d tegu --patches kernelsu,ttl-bypass
+  phb configure -d tegu --patches kernelsu,ttl-hl
   phb configure -d tegu --patches kernelsu           # KernelSU only
 
 EOF
@@ -479,7 +479,7 @@ cmd_configure() {
         for patch in "${PATCH_ARRAY[@]}"; do
             case "$patch" in
                 kernelsu) ENABLE_KERNELSU=true ;;
-                ttl-bypass) ENABLE_TTL_BYPASS=true ;;
+                ttl-hl) ENABLE_TTL_BYPASS=true ;;
                 *) ui_warning "Unknown patch: $patch" ;;
             esac
         done

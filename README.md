@@ -27,7 +27,7 @@ phb.sh run -d tegu -b android-gs-tegu-6.1-android16
 
 # Individual steps
 phb.sh setup -d tegu -b android-gs-tegu-6.1-android16
-phb.sh configure -d tegu --patches kernelsu,ttl-bypass
+phb.sh configure -d tegu --patches kernelsu,ttl-hl
 phb.sh build -d tegu --clean --lto thin
 phb.sh flash -d tegu
 
@@ -64,7 +64,7 @@ phb.sh build --help
 ## Available Patches
 
 - **kernelsu** - KernelSU-Next root solution
-- **ttl-bypass** - TTL/HL hotspot bypass modifications
+- **ttl-hl** - TTL/HL hotspot bypass modifications
 
 Future: SUSFS support (coming soon)
 
