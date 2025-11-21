@@ -5,6 +5,8 @@ Helper script to build and flash custom kernels for your Pixel 9 series device. 
 ## Quick Start
 
 ```bash
+git clone https://github.com/carlelieser/pixel-hotspot-bypass && cd ./pixel-hotspot-bypass
+./phb.sh deps --install
 ./phb.sh run --interactive
 ```
 
