@@ -461,16 +461,7 @@ run_configure() {
         exit 1
     fi
 
-    echo ""
-    echo "${COLOR_BOLD}KernelSU Integration${COLOR_RESET}"
-    clone_kernelsu
-    apply_bazel_version_fix
-    integrate_into_build
-
-    apply_defconfig_changes
-    apply_gki_defconfig_changes
-
-    # WildKernels patches
+    # Apply Wild/Sultan patches FIRST (before KernelSU-Next)
     if [[ "$ENABLE_WILD" == "true" ]]; then
         download_wild_patches
         apply_wild_patches
@@ -480,6 +471,16 @@ run_configure() {
         download_sultan_patches
         apply_sultan_patches
     fi
+
+    # Clone and integrate KernelSU-Next AFTER Wild/Sultan patches
+    echo ""
+    echo "${COLOR_BOLD}KernelSU Integration${COLOR_RESET}"
+    clone_kernelsu
+    apply_bazel_version_fix
+    integrate_into_build
+
+    apply_defconfig_changes
+    apply_gki_defconfig_changes
 
     verify_configs
     invalidate_cache
