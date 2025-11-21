@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 
-source "$SCRIPT_DIR/scripts/common.sh"
+source "$ROOT_DIR/scripts/common.sh"
 source "$SCRIPT_DIR/lib/ui.sh"
 
 DEVICE_CODENAME="${DEVICE_CODENAME:-}"
@@ -254,7 +254,7 @@ cmd_deps() {
             -h|--help) show_deps_help; exit 0 ;;
         esac
     done
-    "$SCRIPT_DIR/scripts/install-dependencies.sh" "$@"
+    "$ROOT_DIR/scripts/install-dependencies.sh" "$@"
 }
 
 cmd_detect() {
@@ -443,7 +443,7 @@ cmd_setup() {
     MANIFEST_BRANCH="$branch"
     export DEVICE_CODENAME MANIFEST_BRANCH MANIFEST_URL
     export KERNEL_DIR OUTPUT_DIR DEFCONFIG_PATH ROOT_DIR
-    source "$SCRIPT_DIR/scripts/setup.sh"
+    source "$ROOT_DIR/scripts/setup.sh"
     run_setup
 }
 
@@ -479,7 +479,7 @@ cmd_configure() {
     export DEVICE_CODENAME KERNELSU_REPO KERNELSU_BRANCH KSU_VERSION KSU_VERSION_TAG
     export ENABLE_KERNELSU ENABLE_TTL_BYPASS
     set_derived_vars
-    source "$SCRIPT_DIR/scripts/configure.sh"
+    source "$ROOT_DIR/scripts/configure.sh"
     run_configure
 }
 
@@ -501,7 +501,7 @@ cmd_build() {
     export DEVICE_CODENAME LTO CLEAN_BUILD AUTO_EXPUNGE
     export SOC BAZEL_CONFIG BUILD_TARGET
     set_derived_vars
-    source "$SCRIPT_DIR/scripts/build.sh"
+    source "$ROOT_DIR/scripts/build.sh"
     run_build
     echo ""
     ui_success "Kernel built successfully!"
@@ -524,7 +524,7 @@ cmd_flash() {
     [[ -n "$output_dir" ]] && OUTPUT_DIR="$output_dir"
     export DEVICE_CODENAME OUTPUT_DIR
     set_derived_vars
-    source "$SCRIPT_DIR/scripts/flash.sh"
+    source "$ROOT_DIR/scripts/flash.sh"
     run_flash
     echo ""
     ui_success "Kernel flashed successfully!"
@@ -575,7 +575,7 @@ cmd_run() {
     ui_steps_init 4
     if [[ "$SKIP_SETUP" != true ]]; then
         ui_step_start "Setup"
-        source "$SCRIPT_DIR/scripts/setup.sh"
+        source "$ROOT_DIR/scripts/setup.sh"
         run_setup
         ui_step_complete "Setup"
     else
@@ -583,7 +583,7 @@ cmd_run() {
     fi
     if [[ "$SKIP_CONFIGURE" != true ]]; then
         ui_step_start "Configure"
-        source "$SCRIPT_DIR/scripts/configure.sh"
+        source "$ROOT_DIR/scripts/configure.sh"
         run_configure
         ui_step_complete "Configure"
     else
@@ -591,7 +591,7 @@ cmd_run() {
     fi
     if [[ "$SKIP_BUILD" != true ]]; then
         ui_step_start "Build"
-        source "$SCRIPT_DIR/scripts/build.sh"
+        source "$ROOT_DIR/scripts/build.sh"
         run_build
         ui_step_complete "Build"
     else
@@ -609,7 +609,7 @@ cmd_run() {
         fi
         if [[ "$should_flash" == true ]]; then
             ui_step_start "Flash"
-            source "$SCRIPT_DIR/scripts/flash.sh"
+            source "$ROOT_DIR/scripts/flash.sh"
             run_flash
             ui_step_complete "Flash"
             echo ""
