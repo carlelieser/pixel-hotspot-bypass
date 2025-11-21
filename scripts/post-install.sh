@@ -47,33 +47,76 @@ parse_arguments() {
     done
 }
 
+validate_post_install_config() {
+    case "$MANAGER_TYPE" in
+        ksunext|ksu-next|ksu) ;;
+        *)
+            ui_error "Invalid manager type: $MANAGER_TYPE (use: ksunext, ksu)"
+            exit 1
+            ;;
+    esac
+}
+
+# Status output helper for consistent formatting
+show_status() {
+    local status="$1"
+    local name="$2"
+    local detail="$3"
+
+    case "$status" in
+        checking)
+            printf "  ${COLOR_BLUE}⠋${COLOR_RESET} %s..." "$name"
+            ;;
+        ok)
+            printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} %-25s ${COLOR_GRAY}%s${COLOR_RESET}\n" "$name" "$detail"
+            ;;
+        warn)
+            printf "\r\033[K  ${COLOR_YELLOW}⚠${COLOR_RESET} %-25s ${COLOR_YELLOW}%s${COLOR_RESET}\n" "$name" "$detail"
+            ;;
+        skip)
+            printf "\r\033[K  ${COLOR_GRAY}○${COLOR_RESET} %-25s ${COLOR_GRAY}%s${COLOR_RESET}\n" "$name" "$detail"
+            ;;
+        error)
+            printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} %-25s ${COLOR_RED}%s${COLOR_RESET}\n" "$name" "$detail"
+            ;;
+    esac
+}
+
 check_prerequisites() {
     echo ""
     echo "${COLOR_BOLD}Prerequisites${COLOR_RESET}"
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking ADB..."
-    if ! command -v adb &>/dev/null; then
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} ADB not found\n"
-        ui_error "Install Android SDK Platform Tools"
-        exit 1
-    fi
-    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} ADB found\n"
+    local tools=("adb" "curl")
+    local all_ok=true
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking device connection..."
-    if ! adb devices | grep -q "device$"; then
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} No device connected\n"
-        ui_info "Connect your device via USB with debugging enabled"
-        exit 1
-    fi
-    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Device connected\n"
+    for tool in "${tools[@]}"; do
+        show_status checking "$tool"
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking curl..."
-    if ! command -v curl &>/dev/null; then
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} curl not found\n"
-        ui_error "Install curl to download files"
+        if command -v "$tool" &>/dev/null; then
+            local path=$(command -v "$tool")
+            show_status ok "$tool" "$path"
+        else
+            show_status error "$tool" "not found"
+            all_ok=false
+        fi
+    done
+
+    if [[ "$all_ok" == false ]]; then
+        echo ""
+        ui_error "Missing prerequisites"
         exit 1
     fi
-    printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} curl found\n"
+
+    # Check device connection
+    show_status checking "Device connection"
+    if adb devices | grep -q "device$"; then
+        local device_model=$(adb shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+        show_status ok "Device connection" "$device_model"
+    else
+        show_status error "Device connection" "no device"
+        ui_info "Connect device via USB with debugging enabled"
+        exit 1
+    fi
 
     mkdir -p "$DOWNLOAD_DIR"
 }
@@ -112,27 +155,23 @@ install_manager() {
             manager_name="KernelSU"
             apk_file="$DOWNLOAD_DIR/KernelSU_manager.apk"
             ;;
-        *)
-            ui_error "Unknown manager type: $MANAGER_TYPE (use: ksunext, ksu)"
-            exit 1
-            ;;
     esac
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Downloading %s manager..." "$manager_name"
+    show_status checking "Download $manager_name"
     if download_file "$manager_url" "$apk_file"; then
         local size=$(du -h "$apk_file" 2>/dev/null | cut -f1)
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Downloaded %s manager ${COLOR_GRAY}(%s)${COLOR_RESET}\n" "$manager_name" "$size"
+        show_status ok "Download $manager_name" "$size"
     else
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Failed to download %s manager\n" "$manager_name"
+        show_status error "Download $manager_name" "failed"
         ui_info "Download manually: $manager_url"
         return 1
     fi
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Installing %s manager..." "$manager_name"
+    show_status checking "Install APK"
     if adb install -r "$apk_file" &>/dev/null; then
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Installed %s manager\n" "$manager_name"
+        show_status ok "Install APK" "$manager_name"
     else
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Failed to install %s manager\n" "$manager_name"
+        show_status error "Install APK" "failed"
         ui_info "Install manually: adb install $apk_file"
         return 1
     fi
@@ -145,63 +184,58 @@ install_module() {
     local module_file="$DOWNLOAD_DIR/unlimited-hotspot.zip"
     local device_path="/data/local/tmp/unlimited-hotspot.zip"
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Downloading unlimited-hotspot module..."
+    show_status checking "Download module"
     if download_file "$UNLIMITED_HOTSPOT_URL" "$module_file" "$UNLIMITED_HOTSPOT_FALLBACK_URL"; then
         local size=$(du -h "$module_file" 2>/dev/null | cut -f1)
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Downloaded unlimited-hotspot ${COLOR_GRAY}(%s)${COLOR_RESET}\n" "$size"
+        show_status ok "Download module" "$size"
     else
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Failed to download module\n"
-        ui_info "Download manually: https://github.com/felikcat/unlimited-hotspot/releases"
+        show_status error "Download module" "failed"
+        ui_info "Download: https://github.com/felikcat/unlimited-hotspot/releases"
         return 1
     fi
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Pushing module to device..."
+    show_status checking "Push to device"
     if adb push "$module_file" "$device_path" &>/dev/null; then
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Module pushed to device\n"
+        show_status ok "Push to device" "/data/local/tmp/"
     else
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Failed to push module\n"
+        show_status error "Push to device" "failed"
         return 1
     fi
 
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Checking for ksud..."
+    # Try ksud first
+    show_status checking "ksud"
     if adb shell "su -c 'which ksud'" &>/dev/null; then
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} ksud found\n"
+        show_status ok "ksud" "found"
 
-        printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Installing module via ksud..."
+        show_status checking "Install via ksud"
         local install_output
         install_output=$(adb shell "su -c 'ksud module install $device_path'" 2>&1)
         if [[ $? -eq 0 ]] && ! echo "$install_output" | grep -qi "error\|failed"; then
-            printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Module installed successfully\n"
+            show_status ok "Install via ksud" "success"
             adb shell "rm -f $device_path" &>/dev/null
-            echo ""
-            ui_info "Reboot device to activate the module"
             return 0
         else
-            printf "\r\033[K  ${COLOR_YELLOW}⚠${COLOR_RESET} ksud install failed, trying alternative method\n"
+            show_status warn "Install via ksud" "failed, trying fallback"
         fi
     else
-        printf "\r\033[K  ${COLOR_YELLOW}⚠${COLOR_RESET} ksud not found, trying alternative method\n"
+        show_status warn "ksud" "not found, trying fallback"
     fi
 
-    # Fallback: extract module directly to modules directory
-    printf "  ${COLOR_BLUE}⠋${COLOR_RESET} Installing module directly..."
+    # Fallback: extract directly to modules directory
+    show_status checking "Direct install"
     local module_id="unlimited_hotspot"
     local modules_dir="/data/adb/modules"
-
-    # Create modules directory and extract
     local extract_cmd="su -c 'mkdir -p $modules_dir/$module_id && unzip -o $device_path -d $modules_dir/$module_id && chmod -R 755 $modules_dir/$module_id'"
+
     if adb shell "$extract_cmd" &>/dev/null; then
-        printf "\r\033[K  ${COLOR_GREEN}✓${COLOR_RESET} Module installed to $modules_dir/$module_id\n"
+        show_status ok "Direct install" "$modules_dir/$module_id"
         adb shell "rm -f $device_path" &>/dev/null
-        echo ""
-        ui_info "Reboot device to activate the module"
         return 0
     else
-        printf "\r\033[K  ${COLOR_RED}✗${COLOR_RESET} Direct installation failed\n"
+        show_status error "Direct install" "failed"
         # Copy to Download as last resort
         adb shell "cp $device_path /sdcard/Download/unlimited-hotspot.zip" &>/dev/null
         adb shell "rm -f $device_path" &>/dev/null
-        echo ""
         ui_info "Module copied to /sdcard/Download/"
         echo "  Install manually via KernelSU manager"
         return 1
@@ -211,28 +245,34 @@ install_module() {
 print_summary() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "${COLOR_GREEN}✓${COLOR_RESET} Post-install complete!"
+    echo "${COLOR_GREEN}✓${COLOR_RESET} Post-install complete"
     echo ""
-    echo "  Next steps:"
-    echo "  1. Reboot device to activate module"
-    echo "  2. Open KernelSU manager to verify"
+    echo "  Reboot device to activate module"
+
+    if [[ "${PHB_WORKFLOW:-}" != "true" ]]; then
+        echo ""
+        echo "  Verify: ${COLOR_CYAN}Open KernelSU manager app${COLOR_RESET}"
+    fi
 }
 
 run_post_install() {
     ui_header "Post-Install"
+    echo "  Manager: ${COLOR_CYAN}$MANAGER_TYPE${COLOR_RESET}"
 
     check_prerequisites
 
     if [[ "$SKIP_MANAGER" != true ]]; then
         install_manager || true
     else
-        ui_dim "Skipping manager installation"
+        echo ""
+        ui_dim "  Skipping manager installation"
     fi
 
     if [[ "$SKIP_MODULE" != true ]]; then
         install_module || true
     else
-        ui_dim "Skipping module installation"
+        echo ""
+        ui_dim "  Skipping module installation"
     fi
 
     print_summary
@@ -240,5 +280,6 @@ run_post_install() {
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     parse_arguments "$@"
+    validate_post_install_config
     run_post_install
 fi
