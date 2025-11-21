@@ -36,9 +36,12 @@ ONLY_FLASH=false
 
 ENABLE_KERNELSU=true
 ENABLE_TTL_BYPASS=true
+ENABLE_SUSFS=false
 ENABLE_WILD=false
 ENABLE_SULTAN=false
 SELECTED_PATCHES=""
+SUSFS_REPO="${SUSFS_REPO:-https://github.com/kutemeikito/susfs4ksu}"
+SUSFS_BRANCH="${SUSFS_BRANCH:-gki-android14-6.1}"
 
 CONFIG_FILE="$ROOT_DIR/.phb.conf"
 
@@ -262,6 +265,7 @@ CLEAN_BUILD="$CLEAN_BUILD"
 AUTO_EXPUNGE="$AUTO_EXPUNGE"
 ENABLE_KERNELSU="$ENABLE_KERNELSU"
 ENABLE_TTL_BYPASS="$ENABLE_TTL_BYPASS"
+ENABLE_SUSFS="$ENABLE_SUSFS"
 ENABLE_WILD="$ENABLE_WILD"
 ENABLE_SULTAN="$ENABLE_SULTAN"
 SELECTED_PATCHES="$SELECTED_PATCHES"
@@ -418,6 +422,7 @@ interactive_patch_selection() {
     # Reset selections
     ENABLE_KERNELSU=false
     ENABLE_TTL_BYPASS=false
+    ENABLE_SUSFS=false
     ENABLE_WILD=false
     ENABLE_SULTAN=false
     SELECTED_PATCHES=""
@@ -431,11 +436,11 @@ interactive_patch_selection() {
     local patches_dir="$ROOT_DIR/patches"
 
     # Features
-    items+=("KernelSU-Next" "TTL/HL")
-    types+=("feature" "feature")
-    ids+=("kernelsu" "ttl")
-    parents+=("" "")
-    defaults+=("true" "true")
+    items+=("KernelSU-Next" "TTL/HL" "SUSFS")
+    types+=("feature" "feature" "feature")
+    ids+=("kernelsu" "ttl" "susfs")
+    parents+=("" "" "")
+    defaults+=("true" "true" "false")
 
     # Wild group
     items+=("Wild")
@@ -493,6 +498,7 @@ interactive_patch_selection() {
         case "$id" in
             kernelsu) ENABLE_KERNELSU=true ;;
             ttl) ENABLE_TTL_BYPASS=true ;;
+            susfs) ENABLE_SUSFS=true ;;
             wild:*)
                 ENABLE_WILD=true
                 selected_patches+=("wild/${id#wild:}")
@@ -512,6 +518,7 @@ interactive_patch_selection() {
     ui_info "Configuration:"
     [[ "$ENABLE_KERNELSU" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} KernelSU-Next" || echo "  ${COLOR_GRAY}○${COLOR_RESET} KernelSU-Next"
     [[ "$ENABLE_TTL_BYPASS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} TTL/HL" || echo "  ${COLOR_GRAY}○${COLOR_RESET} TTL/HL"
+    [[ "$ENABLE_SUSFS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} SUSFS" || echo "  ${COLOR_GRAY}○${COLOR_RESET} SUSFS"
     if [[ ${#selected_patches[@]} -gt 0 ]]; then
         for p in "${selected_patches[@]}"; do
             echo "  ${COLOR_GREEN}✓${COLOR_RESET} $p"
@@ -624,7 +631,8 @@ cmd_configure() {
         done
     fi
     export DEVICE_CODENAME KERNELSU_REPO KERNELSU_BRANCH KSU_VERSION KSU_VERSION_TAG
-    export ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN SELECTED_PATCHES
+    export ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_SUSFS ENABLE_WILD ENABLE_SULTAN SELECTED_PATCHES
+    export SUSFS_REPO SUSFS_BRANCH
     set_derived_vars
     source "$ROOT_DIR/scripts/configure.sh"
     run_configure
@@ -716,8 +724,8 @@ cmd_run() {
     [[ ! "$LTO" =~ ^(none|thin|full)$ ]] && ui_error "Invalid LTO: $LTO" && exit 1
     export DEVICE_CODENAME MANIFEST_BRANCH MANIFEST_URL KERNELSU_REPO KERNELSU_BRANCH \
            KSU_VERSION KSU_VERSION_TAG SOC BAZEL_CONFIG BUILD_TARGET LTO CLEAN_BUILD \
-           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_WILD ENABLE_SULTAN \
-           SELECTED_PATCHES
+           AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS ENABLE_SUSFS ENABLE_WILD ENABLE_SULTAN \
+           SELECTED_PATCHES SUSFS_REPO SUSFS_BRANCH
     set_derived_vars
     export KERNEL_DIR OUTPUT_DIR DEFCONFIG_PATH ROOT_DIR
     export PHB_WORKFLOW=true

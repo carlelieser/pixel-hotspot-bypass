@@ -14,11 +14,14 @@ KSU_VERSION="${KSU_VERSION:-12882}"
 KSU_VERSION_TAG="${KSU_VERSION_TAG:-v1.1.1}"
 AUTO_EXPUNGE="${AUTO_EXPUNGE:-0}"
 ENABLE_KERNELSU="${ENABLE_KERNELSU:-true}"
+ENABLE_SUSFS="${ENABLE_SUSFS:-false}"
 ENABLE_WILD="${ENABLE_WILD:-false}"
 ENABLE_SULTAN="${ENABLE_SULTAN:-false}"
 ENABLE_TTL_BYPASS="${ENABLE_TTL_BYPASS:-true}"
 SELECTED_PATCHES="${SELECTED_PATCHES:-}"  # Comma-separated list of patch files
 WILDKERNELS_REPO="https://raw.githubusercontent.com/WildKernels/kernel_patches/main"
+SUSFS_REPO="${SUSFS_REPO:-https://github.com/kutemeikito/susfs4ksu}"
+SUSFS_BRANCH="${SUSFS_BRANCH:-gki-android14-6.1}"
 
 show_usage() {
     cat << EOF
@@ -182,6 +185,90 @@ integrate_into_build() {
     else
         show_status ok "Integrate into build" "Makefile + Kconfig"
     fi
+}
+
+clone_susfs() {
+    local susfs_dir="${ROOT_DIR}/.susfs4ksu"
+
+    show_status checking "Clone SUSFS"
+
+    if [[ -d "$susfs_dir" ]]; then
+        show_status skip "Clone SUSFS" "already exists"
+        return 0
+    fi
+
+    if git clone "$SUSFS_REPO" "$susfs_dir" --branch "$SUSFS_BRANCH" --depth=1 &>/dev/null; then
+        show_status ok "Clone SUSFS" "$SUSFS_BRANCH"
+    else
+        show_status error "Clone SUSFS" "failed"
+        return 1
+    fi
+}
+
+integrate_susfs() {
+    local susfs_dir="${ROOT_DIR}/.susfs4ksu"
+    local kernel_patches="${susfs_dir}/kernel_patches"
+    local aosp_dir="${KERNEL_DIR}/aosp"
+
+    # Copy fs patches
+    show_status checking "Copy SUSFS fs patches"
+    if [[ -d "${kernel_patches}/fs" ]]; then
+        cp -r "${kernel_patches}/fs/"* "${aosp_dir}/fs/" 2>/dev/null || true
+        show_status ok "Copy SUSFS fs patches" "fs/*"
+    else
+        show_status skip "Copy SUSFS fs patches" "not found"
+    fi
+
+    # Copy include patches
+    show_status checking "Copy SUSFS headers"
+    if [[ -d "${kernel_patches}/include/linux" ]]; then
+        cp -r "${kernel_patches}/include/linux/"* "${aosp_dir}/include/linux/" 2>/dev/null || true
+        show_status ok "Copy SUSFS headers" "include/linux/*"
+    else
+        show_status skip "Copy SUSFS headers" "not found"
+    fi
+
+    # Find and apply the appropriate SUSFS patch
+    show_status checking "Apply SUSFS patch"
+    local susfs_patch=""
+
+    # Look for AOSP patch first, then GKI variants
+    for pattern in "50_add_susfs_in_gki-android14-6.1.patch" "50_add_susfs*.patch"; do
+        susfs_patch=$(find "${kernel_patches}" -name "$pattern" -type f 2>/dev/null | head -1)
+        [[ -n "$susfs_patch" ]] && break
+    done
+
+    if [[ -n "$susfs_patch" && -f "$susfs_patch" ]]; then
+        cd "$aosp_dir"
+        if git apply --check "$susfs_patch" &>/dev/null; then
+            if git apply "$susfs_patch" &>/dev/null; then
+                show_status ok "Apply SUSFS patch" "$(basename "$susfs_patch")"
+            else
+                show_status error "Apply SUSFS patch" "apply failed"
+            fi
+        elif git apply --check -R "$susfs_patch" &>/dev/null; then
+            show_status skip "Apply SUSFS patch" "already applied"
+        else
+            # Try 3-way merge
+            if git apply --3way "$susfs_patch" &>/dev/null; then
+                show_status ok "Apply SUSFS patch" "$(basename "$susfs_patch") (3way)"
+            else
+                show_status error "Apply SUSFS patch" "conflicts"
+            fi
+        fi
+    else
+        show_status skip "Apply SUSFS patch" "patch not found"
+    fi
+}
+
+apply_susfs_defconfig() {
+    local defconfig_path="${KERNEL_DIR}/${DEFCONFIG_PATH}"
+
+    echo ""
+    echo "${COLOR_BOLD}SUSFS Config${COLOR_RESET}"
+
+    apply_config "$defconfig_path" "CONFIG_KSU_SUSFS" "y"
+    apply_config "$defconfig_path" "KSU_SUSFS_HAS_MAGIC_MOUNT" "y"
 }
 
 apply_config() {
@@ -533,13 +620,12 @@ run_configure() {
     echo "  Device: ${COLOR_CYAN}$DEVICE_CODENAME${COLOR_RESET}"
 
     # Show flavor info
-    if [[ "$ENABLE_KERNELSU" == "true" && "$ENABLE_SULTAN" == "true" ]]; then
-        echo "  Flavor: ${COLOR_GRAY}KernelSU-Next + Sultan${COLOR_RESET}"
-    elif [[ "$ENABLE_KERNELSU" == "true" ]]; then
-        echo "  Flavor: ${COLOR_GRAY}KernelSU-Next${COLOR_RESET}"
-    elif [[ "$ENABLE_WILD" == "true" ]]; then
-        echo "  Flavor: ${COLOR_GRAY}Wild (manual hooks)${COLOR_RESET}"
-    fi
+    local flavor=""
+    [[ "$ENABLE_KERNELSU" == "true" ]] && flavor="KernelSU-Next"
+    [[ "$ENABLE_SUSFS" == "true" ]] && flavor="${flavor:+$flavor + }SUSFS"
+    [[ "$ENABLE_SULTAN" == "true" ]] && flavor="${flavor:+$flavor + }Sultan"
+    [[ "$ENABLE_WILD" == "true" ]] && flavor="${flavor:+$flavor + }Wild"
+    [[ -n "$flavor" ]] && echo "  Flavor: ${COLOR_GRAY}$flavor${COLOR_RESET}"
 
     if [[ ! -d "${KERNEL_DIR}/aosp" ]]; then
         echo ""
@@ -573,6 +659,15 @@ run_configure() {
         clone_kernelsu
         apply_bazel_version_fix
         integrate_into_build
+    fi
+
+    # SUSFS integration (if enabled)
+    if [[ "$ENABLE_SUSFS" == "true" ]]; then
+        echo ""
+        echo "${COLOR_BOLD}SUSFS Integration${COLOR_RESET}"
+        clone_susfs
+        integrate_susfs
+        apply_susfs_defconfig
     fi
 
     apply_defconfig_changes
