@@ -284,8 +284,11 @@ print_summary() {
     echo "${COLOR_GREEN}✓${COLOR_RESET} Setup complete"
     echo ""
     echo "  Source: ${COLOR_GRAY}$KERNEL_DIR${COLOR_RESET}"
-    echo ""
-    echo "  Next: ${COLOR_CYAN}phb configure -d $DEVICE_CODENAME${COLOR_RESET}"
+    # Only show "Next" hint when running standalone
+    if [[ "${PHB_WORKFLOW:-}" != "true" ]]; then
+        echo ""
+        echo "  Next: ${COLOR_CYAN}phb configure -d $DEVICE_CODENAME${COLOR_RESET}"
+    fi
 }
 
 run_setup() {

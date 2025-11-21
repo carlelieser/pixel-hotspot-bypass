@@ -193,12 +193,12 @@ apply_config() {
         local current=$(grep "^${config_name}=" "$defconfig" | cut -d'=' -f2)
         sed -i "s/^${config_name}=.*$/${config_name}=${desired_value}/" "$defconfig"
         show_status fixed "$config_name" "${current} → ${desired_value}"
-        return 1
+        return 0
     fi
 
     echo "${config_name}=${desired_value}" >> "$defconfig"
     show_status added "$config_name" "=${desired_value}"
-    return 2
+    return 0
 }
 
 apply_defconfig_changes() {
@@ -317,8 +317,11 @@ print_summary() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "${COLOR_GREEN}✓${COLOR_RESET} Configuration complete"
-    echo ""
-    echo "  Next: ${COLOR_CYAN}phb build -d $DEVICE_CODENAME${COLOR_RESET}"
+    # Only show "Next" hint when running standalone
+    if [[ "${PHB_WORKFLOW:-}" != "true" ]]; then
+        echo ""
+        echo "  Next: ${COLOR_CYAN}phb build -d $DEVICE_CODENAME${COLOR_RESET}"
+    fi
 }
 
 run_configure() {

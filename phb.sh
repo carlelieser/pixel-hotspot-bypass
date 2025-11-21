@@ -572,6 +572,7 @@ cmd_run() {
            AUTO_EXPUNGE ENABLE_KERNELSU ENABLE_TTL_BYPASS
     set_derived_vars
     export KERNEL_DIR OUTPUT_DIR DEFCONFIG_PATH ROOT_DIR
+    export PHB_WORKFLOW=true
     ui_steps_init 4
     if [[ "$SKIP_SETUP" != true ]]; then
         ui_step_start "Setup"

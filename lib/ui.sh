@@ -77,9 +77,10 @@ ui_with_spinner() {
     return $exit_code
 }
 
-UI_STEP_CURRENT=0
-UI_STEP_TOTAL=0
-UI_STEP_START_TIME=0
+# Only initialize if not already set (prevents reset when sourced multiple times)
+UI_STEP_CURRENT="${UI_STEP_CURRENT:-0}"
+UI_STEP_TOTAL="${UI_STEP_TOTAL:-0}"
+UI_STEP_START_TIME="${UI_STEP_START_TIME:-0}"
 
 ui_steps_init() {
     UI_STEP_TOTAL=$1
