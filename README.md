@@ -1,160 +1,160 @@
 # Pixel Hotspot Bypass
 
-A collection of scripts for building a customized kernel for Google Pixel devices with [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next) integration and [TTL/HL](https://en.wikipedia.org/wiki/Time_to_live) hotspot bypass support.
+Build custom Pixel kernel with KernelSU-Next and TTL/HL hotspot bypass support for Pixel 9 series devices.
 
-## Overview
+## Features
 
-Automated build system for Google Pixel kernels with KernelSU-Next root management and TTL/HL modifications for hotspot bypass. Combine with the [unlimited-hotspot module](https://github.com/felikcat/unlimited-hotspot) to bypass carrier restrictions.
-
-**Supported Devices:** Pixel 9 series (Tensor G4)
-
-## Compatibility
-
-**Platform:** Linux or macOS (Windows requires WSL2)
-**Storage:** 100GB+ free disk space
-**Memory:** 16GB+ RAM recommended
-
-## Environment Setup
-
-<details>
-<summary><b>Install Dependencies</b></summary>
-
-**On Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install git-core gnupg flex bison build-essential zip curl \
-  zlib1g-dev libc6-dev-i386 libncurses5 x11proto-core-dev libx11-dev \
-  lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
-```
-
-**On macOS:**
-```bash
-brew install git gnupg coreutils
-```
-</details>
-
-<details>
-<summary><b>Install Platform Tools</b></summary>
-
-Download and install [Android Platform Tools](https://developer.android.com/tools/releases/platform-tools) for ADB/Fastboot:
-
-```bash
-# Extract and add to PATH
-unzip platform-tools-*.zip
-export PATH=$PATH:$PWD/platform-tools
-```
-</details>
-
-<details>
-<summary><b>Install repo Tool</b></summary>
-
-```bash
-mkdir -p ~/.bin
-curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
-chmod a+x ~/.bin/repo
-export PATH=$PATH:~/.bin
-```
-</details>
-
-<details>
-<summary><b>Prepare Device</b></summary>
-
-1. [Enable Developer Options](https://developer.android.com/studio/debug/dev-options#enable) (tap Build Number 7 times)
-2. [Enable USB Debugging](https://developer.android.com/studio/debug/dev-options#debugging) in Developer Options
-3. Unlock bootloader (warning: wipes device)
-   ```bash
-   adb reboot bootloader
-   fastboot flashing unlock
-   ```
-</details>
+- **KernelSU-Next** - Modern root solution with kernel module support
+- **TTL/HL Bypass** - Tethering hotspot bypass modifications
+- **Modular Patches** - Enable/disable patches via interactive checklist
+- **Modern CLI** - Clean subcommand interface with visual enhancements
+- **Auto-Detection** - Automatically detect device and recommend configuration
+- **Configuration Persistence** - Save settings for seamless subsequent builds
 
 ## Quick Start
 
-### 1. Setup
+### Interactive Mode (Recommended for First Run)
 
 ```bash
-git clone https://github.com/yourusername/pixel-hotspot-bypass.git
-cd pixel-hotspot-bypass
-cp .env.sample .env
+./phb.sh run --interactive
 ```
 
-### 2. Configuration
+This will guide you through:
+1. Device selection (with auto-detection if connected)
+2. Patch selection (KernelSU, TTL/HL bypass)
+3. Build options (LTO mode, clean build)
+4. Full workflow execution
 
-Edit `.env` with your device details. Use the detection script if unsure:
+### Auto-Detect Connected Device
 
 ```bash
-./tools/device_info.sh
+./phb.sh detect
 ```
 
-Minimum required settings:
-```bash
-DEVICE_CODENAME=tegu
-MANIFEST_BRANCH=android-gs-tegu-6.1-android16
-```
+Shows device information and recommended configuration.
 
-### 3. Build
-
-Run the complete build pipeline:
+### Manual Configuration
 
 ```bash
-./scripts/start.sh
+./phb.sh run -d tegu -b android-gs-tegu-6.1-android16
 ```
 
-This will:
-1. Download kernel source (~10-15 minutes)
-2. Configure kernel (includes KernelSU integration and defconfig changes) (~3 minutes)
-3. Build kernel (~30-60 minutes)
-4. Optionally flash to device
+## Usage
 
-### 4. Flash
-
-If not flashed during build:
+### Modern Subcommand Interface
 
 ```bash
-./scripts/flash.sh
+# Detect connected device
+phb.sh detect
+
+# Full workflow
+phb.sh run -d tegu -b android-gs-tegu-6.1-android16
+
+# Individual steps
+phb.sh setup -d tegu -b android-gs-tegu-6.1-android16
+phb.sh configure -d tegu --patches kernelsu,ttl-bypass
+phb.sh build -d tegu --clean --lto thin
+phb.sh flash -d tegu
+
+# Quick rebuild (skip setup/configure)
+phb.sh run --skip-setup --skip-configure
+
+# Help
+phb.sh --help
+phb.sh build --help
 ```
 
-Device must be in bootloader mode with USB debugging enabled.
+### Legacy Flag Interface (Backward Compatible)
+
+```bash
+# Full workflow
+./phb.sh -d tegu -b android-gs-tegu-6.1-android16
+
+# Individual steps
+./phb.sh -d tegu -b android-gs-tegu-6.1-android16 --build-only
+./phb.sh -d tegu -b android-gs-tegu-6.1-android16 --flash-only
+
+# With options
+./phb.sh -d tegu -b android-gs-tegu-6.1-android16 --clean --flash
+```
+
+## Commands
+
+- `detect` - Auto-detect connected device and show recommended config
+- `setup` - Download and setup kernel source
+- `configure` - Apply selected patches (KernelSU, TTL/HL bypass, etc.)
+- `build` - Compile kernel
+- `flash` - Flash kernel to device
+- `run` - Execute full workflow (setup → configure → build → flash)
+- `completion` - Generate shell completion script
+
+## Available Patches
+
+- **kernelsu** - KernelSU-Next root solution
+- **ttl-bypass** - TTL/HL hotspot bypass modifications
+
+Future: SUSFS support (coming soon)
 
 ## Configuration
 
-See [.env.sample](.env.sample) for complete configuration documentation.
+First run with `--interactive` creates `.phb.conf` with your settings.
+Subsequent runs automatically use saved configuration:
 
-## Post-Installation
+```bash
+# First run - interactive setup
+./phb.sh run --interactive
 
-After flashing the kernel:
+# Subsequent runs - uses saved config
+./phb.sh run
+```
 
-1. Install [KernelSU Manager](https://github.com/rifsxd/KernelSU-Next/releases)
-2. Install [unlimited-hotspot module](https://github.com/felikcat/unlimited-hotspot) via KernelSU Manager
-3. Reboot device
-4. Verify hotspot functionality
+## Shell Completion
 
-## Resources
+Generate completion scripts for bash or zsh:
 
-**Documentation:**
-- [Google Kernel Build Guide](https://source.android.com/docs/setup/build/building-kernels)
-- [KernelSU-Next](https://github.com/rifsxd/KernelSU-Next)
-- [Pixel Factory Images](https://developers.google.com/android/images)
+```bash
+# Bash
+./phb.sh completion bash > /etc/bash_completion.d/phb
+source ~/.bashrc
 
-**Tools:**
-- [Android Platform Tools (ADB/Fastboot)](https://developer.android.com/tools/releases/platform-tools)
-- [unlimited-hotspot module](https://github.com/felikcat/unlimited-hotspot)
+# Zsh
+./phb.sh completion zsh > ~/.zsh/completions/_phb
+source ~/.zshrc
+```
 
-**Community:**
-- [XDA Developers - Pixel 9 Series](https://xdaforums.com/c/google-pixel-9-series.13305/)
-- [r/GooglePixel](https://reddit.com/r/GooglePixel)
+## Build Process
 
-## License
+1. **Setup** - Sync AOSP kernel source tree using repo tool
+2. **Configure** - Apply selected patches (KernelSU, TTL/HL bypass)
+3. **Build** - Compile kernel and generate boot images
+4. **Flash** - Install boot images via fastboot
 
-Build scripts provided as-is under MIT license. Kernel source is GPL v2. No warranty provided.
+## Supported Devices
 
-## Acknowledgments
+- **tegu** - Pixel 9a
+- **tokay** - Pixel 9
+- **caiman** - Pixel 9 Pro
+- **komodo** - Pixel 9 Pro XL
+- **comet** - Pixel 9 Pro Fold
 
-- Google for open-source Pixel kernels
-- rifsxd for KernelSU-Next
-- felikcat for unlimited-hotspot module
-- XDA community for documentation and support
+## Examples
 
----
+```bash
+# Interactive first-time setup
+./phb.sh run --interactive
 
-**Note:** This project is for educational and research purposes. Modifying carrier restrictions may violate service agreements. Use at your own discretion.
+# Auto-detect and build
+./phb.sh detect
+./phb.sh run -d tegu -b android-gs-tegu-6.1-android16
+
+# Clean build with thin LTO
+./phb.sh build -d tegu --clean --lto thin
+
+# Build with only KernelSU (no TTL bypass)
+./phb.sh configure -d tegu --patches kernelsu
+./phb.sh build -d tegu
+
+# Quick rebuild after code changes
+./phb.sh run --skip-setup --skip-configure
+```
+

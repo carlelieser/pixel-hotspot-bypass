@@ -23,6 +23,7 @@ bazel-*
 
 # Environment configuration
 .env
+.phb.conf
 
 # Python
 __pycache__/

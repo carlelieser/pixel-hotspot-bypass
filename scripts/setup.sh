@@ -2,207 +2,118 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/common.sh"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/common.sh"
 
-init_directories
+DEVICE_CODENAME="${DEVICE_CODENAME:-}"
+MANIFEST_BRANCH="${MANIFEST_BRANCH:-}"
+MANIFEST_URL="${MANIFEST_URL:-https://android.googlesource.com/kernel/manifest}"
+SOC="${SOC:-zumapro}"
+BAZEL_CONFIG="${BAZEL_CONFIG:-}"
+BUILD_TARGET="${BUILD_TARGET:-}"
+LTO="${LTO:-none}"
 
-interactive_setup() {
-    print_divider "Kernel Build Configuration"
-    log_info ""
-    log_info "This wizard will help you configure your build environment."
-    log_info ""
+show_usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
 
-    if [[ -f "${ROOT_DIR}/.env" ]]; then
-        log_warn ".env file already exists"
-        if ! ask_confirmation "Reconfigure?"; then
-            log_info "Using existing configuration"
-            return 0
-        fi
-        echo ""
-    fi
+Setup kernel source for Pixel devices
 
-    local detected_device=""
-    local detected_branch=""
-    local use_detected=false
+REQUIRED OPTIONS (or set via environment variables):
+  -d, --device CODENAME     Device codename (e.g., tegu, tokay, caiman)
+  -b, --branch BRANCH       Manifest branch (e.g., android-gs-tegu-6.1-android16)
 
-    if command -v adb &> /dev/null && adb devices | grep -q "device$"; then
-        log_info "Device detected! Attempting to auto-detect configuration..."
+OPTIONAL OPTIONS:
+  -u, --manifest-url URL    Manifest URL (default: https://android.googlesource.com/kernel/manifest)
+  --soc SOC                 SoC type (default: zumapro)
+  --bazel-config CONFIG     Bazel config (default: same as device)
+  --build-target TARGET     Build target (default: {soc}_{device}_dist)
+  --lto MODE                LTO mode: none, thin, full (default: none)
+  -h, --help                Show this help message
 
-        if [[ -x "${ROOT_DIR}/tools/device_info.sh" ]]; then
-            local detect_output=$("${ROOT_DIR}/tools/device_info.sh" 2>&1 || true)
-            detected_device=$(echo "$detect_output" | grep "DEVICE_CODENAME=" | cut -d'=' -f2 || true)
-            detected_branch=$(echo "$detect_output" | grep "MANIFEST_BRANCH=" | cut -d'=' -f2 || true)
+EXAMPLES:
+  $0 -d tegu -b android-gs-tegu-6.1-android16
+  $0 -d tegu -b android-gs-tegu-6.1-android16 -u https://custom.url/manifest
+  export DEVICE_CODENAME=tegu
+  export MANIFEST_BRANCH=android-gs-tegu-6.1-android16
+  $0
 
-            if [[ -n "$detected_device" && -n "$detected_branch" ]]; then
-                echo ""
-                log_success "Auto-detected configuration:"
-                log_info "  Device: $detected_device"
-                log_info "  Branch: $detected_branch"
-                echo ""
-                if ask_confirmation "Use detected settings?" "Y"; then
-                    use_detected=true
-                fi
-                echo ""
-            fi
-        fi
-    fi
+ENVIRONMENT VARIABLES:
+  DEVICE_CODENAME, MANIFEST_BRANCH, MANIFEST_URL, SOC, BAZEL_CONFIG,
+  BUILD_TARGET, LTO
 
-    if [[ "$use_detected" == false ]]; then
-        echo ""
-        log_info "Common Pixel 9 series codenames:"
-        log_info "  tegu   - Pixel 9a"
-        log_info "  tokay  - Pixel 9"
-        log_info "  caiman - Pixel 9 Pro"
-        log_info "  komodo - Pixel 9 Pro XL"
-        log_info "  comet  - Pixel 9 Pro Fold"
-        echo ""
-        read -p "Enter device codename: " detected_device
-
-        echo ""
-        log_info "Common branch formats:"
-        log_info "  android-gs-tegu-6.1-android15-d4"
-        log_info "  android-gs-tegu-6.1-android16"
-        log_info "  android-gs-tegu-6.1-android16-beta"
-        echo ""
-        read -p "Enter manifest branch: " detected_branch
-    fi
-
-    local soc="zumapro"
-    local bazel_config="$detected_device"
-    local build_target="${soc}_${detected_device}_dist"
-
-    echo ""
-    log_info "Build optimization settings:"
-    echo ""
-    log_info "LTO (Link-Time Optimization):"
-    log_info "  none - Fastest build, larger binary (recommended)"
-    log_info "  thin - Balanced optimization"
-    log_info "  full - Slowest build, smallest binary"
-    echo ""
-    read -p "LTO mode [none]: " lto_mode
-    lto_mode=${lto_mode:-none}
-
-    echo ""
-    read -p "Clean build each time? (0=incremental, 1=clean) [0]: " clean_build
-    clean_build=${clean_build:-0}
-
-    echo ""
-    read -p "Auto-expunge Bazel cache on config changes? (0=manual, 1=auto) [0]: " auto_expunge
-    auto_expunge=${auto_expunge:-0}
-
-    log_info ""
-    print_divider "Configuration Summary"
-    log_info ""
-    log_info "Device Configuration:"
-    log_info "  DEVICE_CODENAME=$detected_device"
-    log_info "  MANIFEST_BRANCH=$detected_branch"
-    log_info "  SOC=$soc"
-    log_info "  BAZEL_CONFIG=$bazel_config"
-    log_info "  BUILD_TARGET=$build_target"
-    log_info ""
-    log_info "Build Settings:"
-    log_info "  LTO=$lto_mode"
-    log_info "  CLEAN_BUILD=$clean_build"
-    log_info "  AUTO_EXPUNGE=$auto_expunge"
-    log_info ""
-
-    if ! ask_confirmation "Save configuration and continue?"; then
-        log_error "Configuration cancelled"
-        exit 1
-    fi
-
-    cat > "${ROOT_DIR}/.env" << EOF
-# Pixel Hotspot Bypass - Configuration
-# Generated by interactive setup
-
-# Device Configuration
-DEVICE_CODENAME=$detected_device
-MANIFEST_BRANCH=$detected_branch
-MANIFEST_URL=https://android.googlesource.com/kernel/manifest
-
-# KernelSU Configuration
-KERNELSU_REPO=https://github.com/rifsxd/KernelSU-Next
-KERNELSU_BRANCH=next
-KSU_VERSION=12882
-KSU_VERSION_TAG=v1.1.1
-
-# Build Configuration
-SOC=$soc
-BAZEL_CONFIG=$bazel_config
-BUILD_TARGET=$build_target
-LTO=$lto_mode
-CLEAN_BUILD=$clean_build
-AUTO_EXPUNGE=$auto_expunge
 EOF
-
-    log_success ".env file created successfully"
-    log_info ""
+    exit 0
 }
 
-check_prerequisites() {
-    log_info "Checking prerequisites..."
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help) show_usage ;;
+            -d|--device) DEVICE_CODENAME="$2"; shift 2 ;;
+            -b|--branch) MANIFEST_BRANCH="$2"; shift 2 ;;
+            -u|--manifest-url) MANIFEST_URL="$2"; shift 2 ;;
+            --soc) SOC="$2"; shift 2 ;;
+            --bazel-config) BAZEL_CONFIG="$2"; shift 2 ;;
+            --build-target) BUILD_TARGET="$2"; shift 2 ;;
+            --lto) LTO="$2"; shift 2 ;;
+            *) log_error "Unknown option: $1"; echo ""; show_usage ;;
+        esac
+    done
+}
+
+validate_setup_config() {
+    local missing=()
+    [[ -z "$DEVICE_CODENAME" ]] && missing+=("DEVICE_CODENAME")
+    [[ -z "$MANIFEST_BRANCH" ]] && missing+=("MANIFEST_BRANCH")
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Missing required configuration: ${missing[*]}"
+        log_error ""
+        log_error "Either:"
+        log_error "  1. Pass via command-line flags (see --help)"
+        log_error "  2. Set environment variables: ${missing[*]}"
+        exit 1
+    fi
+}
+
+setup_check_prerequisites() {
     check_commands repo git python3
-    log_info "All prerequisites satisfied"
+    log_success "Prerequisites satisfied"
 }
 
 setup_kernel_source() {
-    if [[ -d "$KERNEL_DIR" ]]; then
-        log_warn "Kernel directory already exists: $KERNEL_DIR"
-        if ask_confirmation "Remove and re-download?"; then
-            rm -rf "$KERNEL_DIR"
-        else
-            log_info "Skipping kernel source setup"
-            return 0
-        fi
+    if ! confirm_and_remove_directory "$KERNEL_DIR" "Kernel directory" "re-download"; then
+        return 0
     fi
-
-    mkdir -p "$KERNEL_DIR"
-    cd "$KERNEL_DIR"
-
-    log_info "Initializing repo with manifest: $MANIFEST_URL"
+    mkdir -p "$KERNEL_DIR" && cd "$KERNEL_DIR"
+    log_info "Initializing repo: $MANIFEST_BRANCH"
     repo init -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH" --depth=1
-
     log_info "Syncing kernel source (this may take a while)..."
     repo sync -c -j$(nproc) --no-tags --no-clone-bundle --fail-fast
-
-    log_info "Kernel source setup complete"
+    log_success "Kernel source synced"
 }
 
 patch_kleaf() {
-    log_info "Patching Kleaf build system..."
-
     local filegroup_bzl="${KERNEL_DIR}/build/kernel/kleaf/impl/kernel_filegroup.bzl"
-
-    if [[ ! -f "$filegroup_bzl" ]]; then
-        log_warn "kernel_filegroup.bzl not found, skipping Kleaf patch"
+    if ! optional_file_check "$filegroup_bzl" "kernel_filegroup.bzl not found, skipping"; then
         return 0
     fi
-
-    if grep -q "strip_modules = False" "$filegroup_bzl"; then
-        log_info "Kleaf already patched"
+    if check_pattern_exists "strip_modules = False" "$filegroup_bzl" "Kleaf already patched"; then
         return 0
     fi
-
-    # Kleaf build system requires specific fields in KernelBuildExtModuleInfo.
-    # These sed commands add missing fields to maintain compatibility with AOSP build changes.
+    log_info "Patching Kleaf build system..."
     sed -i 's/collect_unstripped_modules = ctx.attr.collect_unstripped_modules,$/collect_unstripped_modules = ctx.attr.collect_unstripped_modules,\n        strip_modules = False,/' "$filegroup_bzl"
-
     if ! grep -q "config_env_and_outputs_info = ext_mod_env_and_outputs_info" "$filegroup_bzl"; then
         sed -i 's/modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,$/modules_install_env_and_outputs_info = ext_mod_env_and_outputs_info,\n        config_env_and_outputs_info = ext_mod_env_and_outputs_info,/' "$filegroup_bzl"
     fi
-
     if ! grep -q "module_kconfig = depset()" "$filegroup_bzl"; then
         sed -i 's/module_scripts = module_srcs.module_scripts,$/module_scripts = module_srcs.module_scripts,\n        module_kconfig = depset(),/' "$filegroup_bzl"
     fi
-
-    log_info "Kleaf patched successfully"
+    log_success "Kleaf patched"
 }
 
 create_build_script() {
-    local build_script="${KERNEL_DIR}/build_${DEVICE}.sh"
-
-    log_info "Creating convenience build script: $build_script"
-
+    local build_script="${KERNEL_DIR}/build_${DEVICE_CODENAME}.sh"
     cat > "$build_script" << EOF
 #!/bin/bash
 set -e
@@ -210,45 +121,35 @@ set -e
 SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 cd "\$SCRIPT_DIR"
 
-LTO="\${LTO:-none}"
-if [[ -f "../.env" ]]; then
-    source "../.env"
-fi
+LTO="\${LTO:-${LTO}}"
+BAZEL_CONFIG="\${BAZEL_CONFIG:-${BAZEL_CONFIG}}"
+BUILD_TARGET="\${BUILD_TARGET:-${BUILD_TARGET}}"
 
-# use_source_tree_aosp builds GKI from source instead of downloading prebuilt
-tools/bazel --bazelrc="private/devices/google/${DEVICE}/device.bazelrc" \\
+tools/bazel --bazelrc="private/devices/google/${DEVICE_CODENAME}/device.bazelrc" \\
     build \\
     --lto="\$LTO" \\
-    --config=${BAZEL_CONFIG} \\
+    --config="\$BAZEL_CONFIG" \\
     --config=use_source_tree_aosp \\
-    "//private/devices/google/${DEVICE}:${BUILD_TARGET}"
+    "//private/devices/google/${DEVICE_CODENAME}:\$BUILD_TARGET"
 
 echo "Build complete! Output in bazel-bin/"
 EOF
-
     chmod +x "$build_script"
-    log_info "Build script created"
+    log_success "Build script created: build_${DEVICE_CODENAME}.sh"
 }
 
-main() {
-    interactive_setup
-
-    load_env
-    validate_env_vars "DEVICE_CODENAME" "MANIFEST_BRANCH" "MANIFEST_URL" "BAZEL_CONFIG" "BUILD_TARGET"
-
-    DEVICE="${DEVICE_CODENAME}"
-    KERNEL_DIR="${ROOT_DIR}/kernel-${DEVICE}"
-
-    log_info "Setting up kernel for device: $DEVICE"
-    log_info "Kernel directory: $KERNEL_DIR"
-    log_info "Manifest branch: $MANIFEST_BRANCH"
-
-    check_prerequisites
+run_setup() {
+    log_section "Setup Kernel Source"
+    setup_check_prerequisites
     setup_kernel_source
     patch_kleaf
     create_build_script
-
-    print_divider "Setup complete!"
+    log_success "Setup complete"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    parse_arguments "$@"
+    validate_setup_config
+    set_derived_vars
+    run_setup
+fi
