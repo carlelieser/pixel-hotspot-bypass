@@ -422,60 +422,87 @@ interactive_patch_selection() {
     ENABLE_SULTAN=false
     SELECTED_PATCHES=""
 
-    # Step 1: Ask about KernelSU-Next
-    local ksu_selection
-    ksu_selection=$(ui_select "Enable KernelSU-Next?" \
-        "Yes (kprobes hooks, recommended)" \
-        "No")
-    if [[ "$ksu_selection" == "Yes"* ]]; then
-        ENABLE_KERNELSU=true
-    fi
-
-    # Step 2: Ask about TTL/HL
-    local ttl_selection
-    ttl_selection=$(ui_select "Enable TTL/HL?" \
-        "Yes (hotspot tethering)" \
-        "No")
-    if [[ "$ttl_selection" == "Yes"* ]]; then
-        ENABLE_TTL_BYPASS=true
-    fi
-
-    # Step 3: Discover patches and show selector
+    # Build hierarchical checklist
     local -a items=()
-    local -a item_types=()
-    local -a patch_files=()
+    local -a types=()
+    local -a ids=()
+    local -a parents=()
+    local -a defaults=()
     local patches_dir="$ROOT_DIR/patches"
 
-    if [[ -d "$patches_dir" ]]; then
+    # Features
+    items+=("KernelSU-Next" "TTL/HL")
+    types+=("feature" "feature")
+    ids+=("kernelsu" "ttl")
+    parents+=("" "")
+    defaults+=("true" "true")
+
+    # Wild group
+    items+=("Wild")
+    types+=("group")
+    ids+=("wild")
+    parents+=("")
+    defaults+=("false")
+
+    # Wild patches
+    if [[ -d "$patches_dir/wild" ]]; then
         while IFS= read -r patch_file; do
             [[ -z "$patch_file" ]] && continue
-            local patch_name=$(get_patch_name "$patch_file")
+            local patch_name="${patch_file#$patches_dir/wild/}"
             items+=("$patch_name")
-            item_types+=("patch")
-            patch_files+=("$patch_file")
-        done < <(discover_patches)
+            types+=("patch")
+            ids+=("wild:$patch_name")
+            parents+=("wild")
+            defaults+=("false")
+        done < <(find "$patches_dir/wild" -name "*.patch" -type f 2>/dev/null | sort)
     fi
 
+    # Sultan group
+    items+=("Sultan")
+    types+=("group")
+    ids+=("sultan")
+    parents+=("")
+    defaults+=("false")
+
+    # Sultan patches
+    if [[ -d "$patches_dir/sultan" ]]; then
+        while IFS= read -r patch_file; do
+            [[ -z "$patch_file" ]] && continue
+            local patch_name="${patch_file#$patches_dir/sultan/}"
+            items+=("$patch_name")
+            types+=("patch")
+            ids+=("sultan:$patch_name")
+            parents+=("sultan")
+            defaults+=("false")
+        done < <(find "$patches_dir/sultan" -name "*.patch" -type f 2>/dev/null | sort)
+    fi
+
+    # Pass arrays via globals
+    UI_CG_ITEMS=("${items[@]}")
+    UI_CG_TYPES=("${types[@]}")
+    UI_CG_IDS=("${ids[@]}")
+    UI_CG_PARENTS=("${parents[@]}")
+    UI_CG_DEFAULTS=("${defaults[@]}")
+
+    local selected_str
+    selected_str=$(ui_checklist_grouped "Select Features & Patches")
+
+    # Parse selected items
     local -a selected_patches=()
-
-    # Only show patch selector if there are patches
-    if [[ ${#items[@]} -gt 0 ]]; then
-        # Pass arrays via globals for conflict-aware checklist
-        UI_CWC_ITEMS=("${items[@]}")
-        UI_CWC_TYPES=("${item_types[@]}")
-        UI_CWC_PATCH_FILES=("${patch_files[@]}")
-        UI_CWC_KPROBES_ENABLED="$ENABLE_KERNELSU"
-
-        local selected_str
-        selected_str=$(ui_checklist_with_conflicts "Select Patches" "${KERNEL_DIR}/aosp")
-
-        # Parse selected patches
-        for patch_name in "${items[@]}"; do
-            if [[ " $selected_str " == *" $patch_name "* ]] || [[ "$selected_str" == "$patch_name" ]]; then
-                selected_patches+=("$patch_name")
-            fi
-        done
-    fi
+    for id in $selected_str; do
+        case "$id" in
+            kernelsu) ENABLE_KERNELSU=true ;;
+            ttl) ENABLE_TTL_BYPASS=true ;;
+            wild:*)
+                ENABLE_WILD=true
+                selected_patches+=("wild/${id#wild:}")
+                ;;
+            sultan:*)
+                ENABLE_SULTAN=true
+                selected_patches+=("sultan/${id#sultan:}")
+                ;;
+        esac
+    done
 
     # Join selected patches with comma
     SELECTED_PATCHES=$(IFS=','; echo "${selected_patches[*]}")
@@ -483,14 +510,12 @@ interactive_patch_selection() {
     # Show summary
     echo ""
     ui_info "Configuration:"
-    [[ "$ENABLE_KERNELSU" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} KernelSU-Next (kprobes)" || echo "  ${COLOR_GRAY}○${COLOR_RESET} KernelSU-Next"
+    [[ "$ENABLE_KERNELSU" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} KernelSU-Next" || echo "  ${COLOR_GRAY}○${COLOR_RESET} KernelSU-Next"
     [[ "$ENABLE_TTL_BYPASS" == true ]] && echo "  ${COLOR_GREEN}✓${COLOR_RESET} TTL/HL" || echo "  ${COLOR_GRAY}○${COLOR_RESET} TTL/HL"
     if [[ ${#selected_patches[@]} -gt 0 ]]; then
         for p in "${selected_patches[@]}"; do
             echo "  ${COLOR_GREEN}✓${COLOR_RESET} $p"
         done
-    else
-        echo "  ${COLOR_GRAY}○${COLOR_RESET} No patches selected"
     fi
 }
 

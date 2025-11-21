@@ -327,6 +327,155 @@ ui_box() {
     echo "╰$(printf '─%.0s' $(seq 1 $((max_width))))╯"
 }
 
+# Grouped checklist with hierarchical display
+# Usage: ui_checklist_grouped "title"
+# Args passed via global arrays:
+#   UI_CG_ITEMS - display names
+#   UI_CG_TYPES - "feature", "group", or "patch"
+#   UI_CG_IDS - unique identifiers for each item
+#   UI_CG_PARENTS - parent group ID (empty for top-level items)
+#   UI_CG_DEFAULTS - "true" or "false" for default selection state
+ui_checklist_grouped() {
+    local title="$1"
+
+    local -a items=("${UI_CG_ITEMS[@]}")
+    local -a types=("${UI_CG_TYPES[@]}")
+    local -a ids=("${UI_CG_IDS[@]}")
+    local -a parents=("${UI_CG_PARENTS[@]}")
+    local -a defaults=("${UI_CG_DEFAULTS[@]}")
+
+    local -a selected=()
+    for ((i=0; i<${#items[@]}; i++)); do
+        selected+=("${defaults[$i]:-false}")
+    done
+
+    local current=0
+    local key
+
+    # Helper: get children of a group
+    _get_children() {
+        local parent_id="$1"
+        local -a children=()
+        for ((i=0; i<${#items[@]}; i++)); do
+            if [[ "${parents[$i]}" == "$parent_id" ]]; then
+                children+=("$i")
+            fi
+        done
+        echo "${children[*]}"
+    }
+
+    # Helper: check if all children are selected
+    _all_children_selected() {
+        local parent_id="$1"
+        local children
+        read -ra children <<< "$(_get_children "$parent_id")"
+        [[ ${#children[@]} -eq 0 ]] && return 1
+        for idx in "${children[@]}"; do
+            [[ "${selected[$idx]}" != "true" ]] && return 1
+        done
+        return 0
+    }
+
+    # Helper: check if any children are selected
+    _any_children_selected() {
+        local parent_id="$1"
+        local children
+        read -ra children <<< "$(_get_children "$parent_id")"
+        for idx in "${children[@]}"; do
+            [[ "${selected[$idx]}" == "true" ]] && return 0
+        done
+        return 1
+    }
+
+    # Enter alternate screen buffer, hide cursor
+    printf '\033[?1049h\033[?25l\033[H' >/dev/tty
+
+    while true; do
+        printf '\033[H\033[J' >/dev/tty
+        printf '%s\n\n' "${COLOR_BOLD}${COLOR_MAGENTA}$title${COLOR_RESET}" >/dev/tty
+
+        for ((i=0; i<${#items[@]}; i++)); do
+            local indicator="○"
+            local color=""
+            local indent=""
+            local item_type="${types[$i]}"
+
+            # Handle indentation for patches under groups
+            if [[ -n "${parents[$i]}" ]]; then
+                indent="  "
+            fi
+
+            if [[ "$item_type" == "group" ]]; then
+                # Group: show filled if all children selected, half if some, empty if none
+                if _all_children_selected "${ids[$i]}"; then
+                    indicator="●"
+                    color="${COLOR_GREEN}"
+                elif _any_children_selected "${ids[$i]}"; then
+                    indicator="◐"
+                    color="${COLOR_YELLOW}"
+                fi
+            else
+                if [[ "${selected[$i]}" == "true" ]]; then
+                    indicator="●"
+                    color="${COLOR_GREEN}"
+                fi
+            fi
+
+            if [[ $i -eq $current ]]; then
+                printf '%s\n' "${indent}${COLOR_CYAN}▸${COLOR_RESET} ${color}${indicator} ${items[$i]}${COLOR_RESET}" >/dev/tty
+            else
+                printf '%s\n' "${indent}  ${color}${indicator} ${items[$i]}${COLOR_RESET}" >/dev/tty
+            fi
+        done
+
+        printf '\n%s\n' "${COLOR_GRAY}↑/↓: Navigate  Space: Toggle  Enter: Confirm${COLOR_RESET}" >/dev/tty
+
+        IFS= read -rsn1 key </dev/tty
+        case "$key" in
+            $'\x1b')
+                IFS= read -rsn2 -t 0.1 key </dev/tty
+                case "$key" in
+                    '[A') ((current--)); [[ $current -lt 0 ]] && current=$((${#items[@]} - 1)) ;;
+                    '[B') ((current++)); [[ $current -ge ${#items[@]} ]] && current=0 ;;
+                esac
+                ;;
+            ' ')
+                local cur_type="${types[$current]}"
+                if [[ "$cur_type" == "group" ]]; then
+                    # Toggle all children
+                    local children
+                    read -ra children <<< "$(_get_children "${ids[$current]}")"
+                    local new_state="true"
+                    _all_children_selected "${ids[$current]}" && new_state="false"
+                    for idx in "${children[@]}"; do
+                        selected[$idx]="$new_state"
+                    done
+                else
+                    # Toggle individual item
+                    if [[ "${selected[$current]}" == "true" ]]; then
+                        selected[$current]="false"
+                    else
+                        selected[$current]="true"
+                    fi
+                fi
+                ;;
+            '') break ;;
+        esac
+    done
+
+    # Exit alternate screen buffer, show cursor
+    printf '\033[?25h\033[?1049l' >/dev/tty
+
+    # Return selected IDs (non-group items only)
+    local result=()
+    for ((i=0; i<${#items[@]}; i++)); do
+        if [[ "${selected[$i]}" == "true" && "${types[$i]}" != "group" ]]; then
+            result+=("${ids[$i]}")
+        fi
+    done
+    echo "${result[*]}"
+}
+
 # Checklist with conflict detection for patches
 # Usage: ui_checklist_with_conflicts "title" target_dir
 # Args passed via global arrays: UI_CWC_ITEMS, UI_CWC_TYPES, UI_CWC_PATCH_FILES, UI_CWC_KPROBES_ENABLED
